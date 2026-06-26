@@ -1,0 +1,507 @@
+// VetMedAgri — Postgres schema (Prisma) modeling the migrated WooCommerce store.
+// Designed from migration/MIGRATION-PLAN.md + db-analysis.md + schema-inspection.md.
+// `wpId` columns preserve the original WordPress IDs for ETL mapping and SEO redirects.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------------------
+// Catalog
+// ----------------------------------------------------------------------------
+
+model Brand {
+  id          Int       @id @default(autoincrement())
+  wpId        Int?      @unique // term_id of pwb-brand
+  name        String
+  slug        String    @unique
+  description String?
+  imageUrl    String?
+  products    Product[]
+  createdAt   DateTime  @default(now())
+}
+
+model Category {
+  id          Int        @id @default(autoincrement())
+  wpId        Int?       @unique // term_id of product_cat
+  name        String
+  slug        String     @unique
+  description String?
+  imageUrl    String?
+  parentId    Int?
+  parent      Category?  @relation("CategoryTree", fields: [parentId], references: [id])
+  children    Category[] @relation("CategoryTree")
+  products    Product[]  @relation("ProductCategories")
+  // SEO
+  seoTitle    String?
+  seoDesc     String?
+  createdAt   DateTime   @default(now())
+
+  @@index([parentId])
+}
+
+model Tag {
+  id       Int       @id @default(autoincrement())
+  wpId     Int?      @unique
+  name     String
+  slug     String    @unique
+  products Product[] @relation("ProductTags")
+}
+
+model Attribute {
+  id     Int              @id @default(autoincrement())
+  wpId   Int?             @unique // woocommerce_attribute_taxonomies.attribute_id
+  name   String // e.g. "select-options"
+  label  String // e.g. "Select Options"
+  slug   String           @unique // pa_select-options
+  values AttributeValue[]
+}
+
+model AttributeValue {
+  id          Int                @id @default(autoincrement())
+  wpId        Int?               @unique // term_id
+  attributeId Int
+  attribute   Attribute          @relation(fields: [attributeId], references: [id])
+  value       String
+  slug        String
+  variants    VariantAttribute[]
+  products    ProductAttribute[]
+
+  @@unique([attributeId, slug])
+}
+
+enum ProductType {
+  SIMPLE
+  VARIABLE
+  GROUPED
+  EXTERNAL
+}
+
+enum ProductStatus {
+  PUBLISHED
+  DRAFT
+  PRIVATE
+  TRASH
+}
+
+enum StockStatus {
+  IN_STOCK
+  OUT_OF_STOCK
+  ON_BACKORDER
+}
+
+model Product {
+  id               Int                @id @default(autoincrement())
+  wpId             Int?               @unique // posts.ID
+  type             ProductType        @default(SIMPLE)
+  status           ProductStatus      @default(PUBLISHED)
+  name             String
+  slug             String             @unique
+  sku              String?
+  description      String? // long description (Divi-stripped HTML)
+  shortDescription String?
+  // pricing (null for variable parent — see variants)
+  price            Decimal?           @db.Decimal(12, 2)
+  regularPrice     Decimal?           @db.Decimal(12, 2)
+  salePrice        Decimal?           @db.Decimal(12, 2)
+  // inventory
+  manageStock      Boolean            @default(false)
+  stockQuantity    Int?
+  stockStatus      StockStatus        @default(IN_STOCK)
+  // tax / shipping
+  taxStatus        String             @default("taxable")
+  taxClass         String?
+  weight           Decimal?           @db.Decimal(10, 3)
+  length           Decimal?           @db.Decimal(10, 2)
+  width            Decimal?           @db.Decimal(10, 2)
+  height           Decimal?           @db.Decimal(10, 2)
+  // misc
+  featured         Boolean            @default(false)
+  totalSales       Int                @default(0)
+  externalUrl      String?
+  // relations
+  brandId          Int?
+  brand            Brand?             @relation(fields: [brandId], references: [id])
+  categories       Category[]         @relation("ProductCategories")
+  tags             Tag[]              @relation("ProductTags")
+  images           ProductImage[]
+  variants         ProductVariant[]
+  attributes       ProductAttribute[]
+  reviews          Review[]
+  orderItems       OrderItem[]
+  // SEO
+  seoTitle         String?
+  seoDesc          String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([brandId])
+  @@index([status])
+}
+
+model ProductImage {
+  id        Int     @id @default(autoincrement())
+  wpId      Int? // attachment post ID
+  productId Int
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String?
+  position  Int     @default(0)
+  isPrimary Boolean @default(false)
+
+  @@index([productId])
+}
+
+model ProductVariant {
+  id            Int                @id @default(autoincrement())
+  wpId          Int?               @unique // product_variation post ID
+  productId     Int
+  product       Product            @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sku           String?
+  price         Decimal?           @db.Decimal(12, 2)
+  regularPrice  Decimal?           @db.Decimal(12, 2)
+  salePrice     Decimal?           @db.Decimal(12, 2)
+  manageStock   Boolean            @default(false)
+  stockQuantity Int?
+  stockStatus   StockStatus        @default(IN_STOCK)
+  weight        Decimal?           @db.Decimal(10, 3)
+  imageUrl      String?
+  attributes    VariantAttribute[]
+  orderItems    OrderItem[]
+
+  @@index([productId])
+}
+
+// chosen attribute values for a variant (e.g. select-options = "X")
+model VariantAttribute {
+  id               Int            @id @default(autoincrement())
+  variantId        Int
+  variant          ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  attributeValueId Int
+  attributeValue   AttributeValue @relation(fields: [attributeValueId], references: [id])
+
+  @@unique([variantId, attributeValueId])
+}
+
+// attribute values available on a product (for variable products)
+model ProductAttribute {
+  id               Int            @id @default(autoincrement())
+  productId        Int
+  product          Product        @relation(fields: [productId], references: [id], onDelete: Cascade)
+  attributeValueId Int
+  attributeValue   AttributeValue @relation(fields: [attributeValueId], references: [id])
+
+  @@unique([productId, attributeValueId])
+}
+
+// ----------------------------------------------------------------------------
+// Customers & auth
+// ----------------------------------------------------------------------------
+
+enum UserRole {
+  CUSTOMER
+  ADMIN
+  SHOP_MANAGER
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  wpId         Int?      @unique // users.ID
+  email        String    @unique
+  // Legacy WP password is phpass-hashed and cannot be reused directly.
+  // Store it for optional verify-then-rehash; otherwise force reset on first login.
+  passwordHash String? // bcrypt (new) — null until set
+  legacyHash   String? // original phpass hash from WP, if migrating
+  firstName    String?
+  lastName     String?
+  phone        String?
+  role         UserRole  @default(CUSTOMER)
+  addresses    Address[]
+  orders       Order[]
+  reviews      Review[]
+  createdAt    DateTime  @default(now())
+  lastLoginAt  DateTime?
+}
+
+enum AddressType {
+  BILLING
+  SHIPPING
+}
+
+model Address {
+  id        Int         @id @default(autoincrement())
+  userId    Int
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      AddressType
+  firstName String?
+  lastName  String?
+  company   String?
+  address1  String?
+  address2  String?
+  city      String?
+  state     String?
+  postcode  String?
+  country   String?
+  phone     String?
+  email     String?
+  isDefault Boolean     @default(false)
+
+  @@index([userId])
+}
+
+// ----------------------------------------------------------------------------
+// Orders
+// ----------------------------------------------------------------------------
+
+enum OrderStatus {
+  PENDING
+  PROCESSING
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+  REFUNDED
+  FAILED
+}
+
+model Order {
+  id                 Int         @id @default(autoincrement())
+  wpId               Int?        @unique // shop_order post ID
+  orderKey           String?     @unique // _order_key
+  number             String? // human order number (often = id)
+  status             OrderStatus @default(PENDING)
+  currency           String      @default("SGD")
+  // totals
+  subtotal           Decimal     @default(0) @db.Decimal(12, 2)
+  discountTotal      Decimal     @default(0) @db.Decimal(12, 2)
+  shippingTotal      Decimal     @default(0) @db.Decimal(12, 2)
+  taxTotal           Decimal     @default(0) @db.Decimal(12, 2)
+  total              Decimal     @default(0) @db.Decimal(12, 2)
+  pricesIncludeTax   Boolean     @default(false)
+  // customer (nullable for guest checkout)
+  userId             Int?
+  user               User?       @relation(fields: [userId], references: [id])
+  customerEmail      String?
+  customerNote       String?
+  // payment
+  paymentMethod      String? // _payment_method (e.g. hitpay)
+  paymentMethodTitle String?
+  transactionId      String?
+  datePaid           DateTime?
+  dateCompleted      DateTime?
+  // embedded addresses (denormalized, as WooCommerce stores them)
+  billing            Json? // {firstName,lastName,company,address1,...}
+  shipping           Json?
+  // provenance
+  createdVia         String?
+  ipAddress          String?
+  userAgent          String?
+  attribution        Json? // _wc_order_attribution_* (UTM etc.)
+  items              OrderItem[]
+  invoice            Invoice?
+  refunds            Refund[]
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id        Int             @id @default(autoincrement())
+  wpId      Int? // woocommerce_order_items.order_item_id
+  orderId   Int
+  order     Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId Int?
+  product   Product?        @relation(fields: [productId], references: [id])
+  variantId Int?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id])
+  name      String
+  sku       String?
+  quantity  Int             @default(1)
+  subtotal  Decimal         @default(0) @db.Decimal(12, 2)
+  total     Decimal         @default(0) @db.Decimal(12, 2)
+  taxTotal  Decimal         @default(0) @db.Decimal(12, 2)
+  meta      Json? // remaining order_itemmeta
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model Refund {
+  id        Int      @id @default(autoincrement())
+  wpId      Int?     @unique // shop_order_refund post ID
+  orderId   Int
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount    Decimal  @db.Decimal(12, 2)
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+}
+
+model Invoice {
+  id            Int       @id @default(autoincrement())
+  orderId       Int       @unique
+  order         Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  number        String // _wcpdf_invoice_number
+  formattedDate String? // _wcpdf_invoice_date_formatted
+  issuedAt      DateTime?
+}
+
+// ----------------------------------------------------------------------------
+// Discounts
+// ----------------------------------------------------------------------------
+
+enum CouponType {
+  FIXED_CART
+  PERCENT
+  FIXED_PRODUCT
+}
+
+model Coupon {
+  id           Int        @id @default(autoincrement())
+  wpId         Int?       @unique // shop_coupon post ID
+  code         String     @unique
+  type         CouponType @default(FIXED_CART)
+  amount       Decimal    @default(0) @db.Decimal(12, 2)
+  description  String?
+  freeShipping Boolean    @default(false)
+  minSpend     Decimal?   @db.Decimal(12, 2)
+  maxSpend     Decimal?   @db.Decimal(12, 2)
+  usageLimit   Int?
+  usageCount   Int        @default(0)
+  expiresAt    DateTime?
+  createdAt    DateTime   @default(now())
+}
+
+// ----------------------------------------------------------------------------
+// Content
+// ----------------------------------------------------------------------------
+
+model Page {
+  id        Int      @id @default(autoincrement())
+  wpId      Int?     @unique // page post ID
+  title     String
+  slug      String   @unique
+  content   String? // Divi-stripped HTML
+  status    String   @default("published")
+  seoTitle  String?
+  seoDesc   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Post {
+  id          Int       @id @default(autoincrement())
+  wpId        Int?      @unique
+  title       String
+  slug        String    @unique
+  content     String?
+  excerpt     String?
+  status      String    @default("published")
+  publishedAt DateTime?
+  seoTitle    String?
+  seoDesc     String?
+}
+
+model Review {
+  id         Int      @id @default(autoincrement())
+  wpId       Int?     @unique // comment_ID
+  productId  Int
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId     Int?
+  user       User?    @relation(fields: [userId], references: [id])
+  authorName String?
+  rating     Int? // 1..5
+  content    String?
+  approved   Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([productId])
+}
+
+model NavigationMenu {
+  id    Int                  @id @default(autoincrement())
+  wpId  Int?                 @unique // nav_menu term_id
+  name  String
+  slug  String               @unique
+  items NavigationMenuItem[]
+}
+
+model NavigationMenuItem {
+  id       Int                  @id @default(autoincrement())
+  wpId     Int? // nav_menu_item post ID
+  menuId   Int
+  menu     NavigationMenu       @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  label    String
+  url      String
+  parentId Int?
+  parent   NavigationMenuItem?  @relation("MenuTree", fields: [parentId], references: [id])
+  children NavigationMenuItem[] @relation("MenuTree")
+  position Int                  @default(0)
+
+  @@index([menuId])
+}
+
+model Redirect {
+  id        Int      @id @default(autoincrement())
+  source    String   @unique
+  target    String
+  code      Int      @default(301)
+  createdAt DateTime @default(now())
+}
+
+model FormSubmission {
+  id        Int      @id @default(autoincrement())
+  wpId      Int?     @unique // db7_forms.form_id
+  formName  String?
+  payload   Json // unserialized CFDB7 data
+  createdAt DateTime @default(now())
+}
+
+// ----------------------------------------------------------------------------
+// Store configuration
+// ----------------------------------------------------------------------------
+
+model TaxRate {
+  id       Int     @id @default(autoincrement())
+  wpId     Int?    @unique
+  country  String?
+  state    String?
+  rate     Decimal @db.Decimal(8, 4)
+  name     String?
+  taxClass String  @default("standard")
+  priority Int     @default(1)
+}
+
+model ShippingZone {
+  id      Int              @id @default(autoincrement())
+  wpId    Int?             @unique
+  name    String
+  regions Json? // matched countries/states
+  methods ShippingMethod[]
+}
+
+model ShippingMethod {
+  id      Int          @id @default(autoincrement())
+  wpId    Int?
+  zoneId  Int
+  zone    ShippingZone @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  type    String // flat_rate, free_shipping, local_pickup
+  title   String
+  cost    Decimal?     @db.Decimal(12, 2)
+  enabled Boolean      @default(true)
+
+  @@index([zoneId])
+}
+
+model Setting {
+  key   String @id
+  value Json
+}
