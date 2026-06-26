@@ -1,0 +1,10 @@
+**/node_modules
+**/dist
+**/.env
+api/public/wp-content
+web/.vite
+migration/extracted
+*.wpress
+wpress-manifest.tsv
+.claude
+*.md

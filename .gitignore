@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+build/
+.next/
+api/dist/
+web/dist/
+
+# Env — never commit real secrets
+.env
+.env.local
+**/.env
+
+# Prisma
+api/prisma/*.db
+
+# Large WordPress export & manifests — too big, not needed in repo
+*.wpress
+migration/extracted/
+wpress-manifest.tsv
+
+# Claude Code session data
+.claude/
+
+# Logs / OS
+*.log
+.DS_Store
+Thumbs.db

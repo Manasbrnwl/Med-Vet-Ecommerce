@@ -1,0 +1,8 @@
+api/public/wp-content/uploads/**/*.png filter=lfs diff=lfs merge=lfs -text
+api/public/wp-content/uploads/**/*.jpg filter=lfs diff=lfs merge=lfs -text
+api/public/wp-content/uploads/**/*.jpeg filter=lfs diff=lfs merge=lfs -text
+api/public/wp-content/uploads/**/*.webp filter=lfs diff=lfs merge=lfs -text
+api/public/wp-content/uploads/**/*.pdf filter=lfs diff=lfs merge=lfs -text
+api/public/wp-content/uploads/**/*.mp4 filter=lfs diff=lfs merge=lfs -text
+api/public/wp-content/uploads/**/*.zip filter=lfs diff=lfs merge=lfs -text
+api/public/wp-content/uploads/**/*.pptx filter=lfs diff=lfs merge=lfs -text
