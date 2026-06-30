@@ -1,6 +1,8 @@
 import { useAuthStore } from "../store/auth";
 
-const BASE = "/api";
+// VITE_API_URL is the API ORIGIN (e.g. https://xxx.awsapprunner.com); "/api" is always appended.
+// Dev: unset → "" + "/api" = "/api" (Vite proxy). Prod: origin + "/api".
+const BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "").replace(/\/api$/, "") + "/api";
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = useAuthStore.getState().token;

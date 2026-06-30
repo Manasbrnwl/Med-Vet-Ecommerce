@@ -22,7 +22,12 @@ const app = express();
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
 }));
-app.use(cors({ origin: process.env.CORS_ORIGIN?.split(",") ?? "*" }));
+const corsOrigin = process.env.CORS_ORIGIN;
+app.use(cors({
+  origin: !corsOrigin || corsOrigin === "*"
+    ? "*"
+    : corsOrigin.split(",").map((s) => s.trim()).filter(Boolean),
+}));
 app.use(pinoHttp());
 
 // ── Static media (extracted from .wpress) ─────────────────────────────────────

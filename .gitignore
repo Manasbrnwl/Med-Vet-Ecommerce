@@ -29,3 +29,12 @@ wpress-manifest.tsv
 *.log
 .DS_Store
 Thumbs.db
+
+# local deploy state + secrets (never commit)
+.deploy/
+
+# Agent / ruflo tooling artifacts (not part of the app)
+ruvector.db
+**/ruvector.db
+agentdb.rvf
+agentdb.rvf.lock

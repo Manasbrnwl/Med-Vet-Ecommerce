@@ -14,7 +14,7 @@
 import { prisma } from "../db.js";
 
 const DRY_RUN   = process.argv.includes("--dry-run");
-const OLD_BASE  = "https://vedmedagri.net";
+const OLD_BASE  = process.env.MEDIA_OLD_BASE ?? "https://vedmedagri.net";
 const NEW_BASE  = (process.env.MEDIA_BASE_URL ?? "http://localhost:4000").replace(/\/$/, "");
 
 async function main() {

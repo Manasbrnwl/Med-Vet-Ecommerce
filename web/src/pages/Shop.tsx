@@ -75,6 +75,9 @@ export default function Shop() {
     hasNextPage,
     isFetchingNextPage,
     isLoading,
+    isError,
+    error,
+    refetch,
   } = useInfiniteQuery<ProductsResponse>({
     queryKey: ["products", "infinite", category, brand, q, sort, minPrice, maxPrice],
     queryFn: ({ pageParam = 1 }) => {
@@ -299,7 +302,20 @@ export default function Shop() {
 
         {/* Products Grid & Loading indicator */}
         <div className="flex-1 min-w-0">
-          <ProductGrid products={products} loading={isLoading && products.length === 0} />
+          {isError ? (
+            <div className="text-center py-16">
+              <p className="text-gray-700 font-semibold">Couldn’t load products.</p>
+              <p className="text-sm text-gray-400 mt-1">{(error as Error)?.message ?? "Please try again."}</p>
+              <button
+                onClick={() => refetch()}
+                className="mt-4 bg-brand text-white font-bold px-5 py-2 rounded-xl text-xs hover:bg-brand-dark transition-all"
+              >
+                Retry
+              </button>
+            </div>
+          ) : (
+            <ProductGrid products={products} loading={isLoading && products.length === 0} />
+          )}
 
           {/* Observer Sentinel Element */}
           {hasNextPage && (
