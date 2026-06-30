@@ -133,12 +133,47 @@ async function migrateVariants(): Promise<void> {
       },
     });
 
-    // Variation attribute values: meta keys like `attribute_pa_select-options`
+    // Variation attribute values: meta keys like `attribute_pa_select-options` or `attribute_quantity`
     for (const [key, val] of Object.entries(m)) {
-      if (!key.startsWith("attribute_pa_") || !val) continue;
-      const slug = key.replace("attribute_pa_", "pa_");
-      const av = await prisma.attributeValue.findFirst({ where: { slug: val, attribute: { slug } } });
-      if (!av) continue;
+      if (!key.startsWith("attribute_") || !val) continue;
+
+      const rawName = key.replace("attribute_pa_", "").replace("attribute_", "");
+      let attrSlug = rawName;
+      if (!attrSlug.startsWith("pa_")) {
+        attrSlug = "pa_" + attrSlug;
+      }
+
+      // Find or create attribute dynamically
+      let attr = await prisma.attribute.findUnique({ where: { slug: attrSlug } });
+      if (!attr) {
+        const label = rawName.split(/[_-]+/).map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(" ");
+        attr = await prisma.attribute.create({
+          data: {
+            name: rawName,
+            label: label,
+            slug: attrSlug,
+          }
+        });
+      }
+
+      // Find or create attribute value dynamically
+      const valSlug = val.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+      let av = await prisma.attributeValue.findFirst({
+        where: {
+          attributeId: attr.id,
+          slug: valSlug,
+        }
+      });
+      if (!av) {
+        av = await prisma.attributeValue.create({
+          data: {
+            attributeId: attr.id,
+            value: val,
+            slug: valSlug,
+          }
+        });
+      }
+
       await prisma.variantAttribute.upsert({
         where: { variantId_attributeValueId: { variantId: variant.id, attributeValueId: av.id } },
         update: {},

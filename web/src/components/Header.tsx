@@ -23,7 +23,7 @@ export default function Header() {
   const cartCount = count();
 
   return (
-    <header className="sticky top-0 z-30 bg-white border-b border-gray-200 shadow-sm">
+    <header className="sticky top-0 z-30 glass border-b border-gray-100 shadow-xs">
       <div className="max-w-7xl mx-auto px-4 flex items-center h-16 gap-4">
         <Link to="/" className="flex-shrink-0 font-bold text-xl text-brand">
           VetMedAgri
@@ -38,6 +38,16 @@ export default function Header() {
           >
             Shop
           </NavLink>
+          {(user?.role === "ADMIN" || user?.role === "SHOP_MANAGER") && (
+            <NavLink
+              to="/admin"
+              className={({ isActive }) =>
+                `text-sm font-medium transition-colors ${isActive ? "text-brand" : "text-gray-600 hover:text-brand"}`
+              }
+            >
+              Admin Panel
+            </NavLink>
+          )}
         </nav>
 
         <form onSubmit={handleSearch} className="hidden md:flex items-center flex-1 max-w-xs">
@@ -103,8 +113,12 @@ export default function Header() {
         </div>
       </div>
 
-      {menuOpen && (
-        <div className="md:hidden border-t border-gray-100 px-4 py-3 space-y-3 bg-white">
+      <div
+        className={`md:hidden overflow-hidden transition-all duration-300 ease-in-out border-t border-gray-100 bg-white ${
+          menuOpen ? "max-h-96 opacity-100 py-3 px-4" : "max-h-0 opacity-0 py-0 px-4 pointer-events-none"
+        }`}
+      >
+        <div className="space-y-3">
           <form onSubmit={handleSearch} className="flex items-center">
             <div className="relative w-full">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -120,26 +134,45 @@ export default function Header() {
           <NavLink
             to="/shop"
             onClick={() => setMenuOpen(false)}
-            className="block text-sm font-medium text-gray-700 py-1"
+            className="block text-sm font-medium text-gray-700 py-1 hover:text-brand"
           >
             Shop
           </NavLink>
+          {(user?.role === "ADMIN" || user?.role === "SHOP_MANAGER") && (
+            <Link
+              to="/admin"
+              onClick={() => setMenuOpen(false)}
+              className="block text-sm font-medium text-brand py-1 hover:underline"
+            >
+              Admin Panel
+            </Link>
+          )}
           {user ? (
-            <>
-              <Link to="/account" onClick={() => setMenuOpen(false)} className="block text-sm text-gray-700 py-1">
+            <div className="pt-2 border-t border-gray-50 flex items-center justify-between">
+              <Link to="/account" onClick={() => setMenuOpen(false)} className="text-sm font-semibold text-gray-700 hover:text-brand">
                 My Account
               </Link>
-              <button onClick={() => { clearAuth(); setMenuOpen(false); }} className="text-sm text-gray-400">
+              <button
+                onClick={() => {
+                  clearAuth();
+                  setMenuOpen(false);
+                }}
+                className="text-xs font-semibold text-gray-400 hover:text-red-500"
+              >
                 Sign out
               </button>
-            </>
+            </div>
           ) : (
-            <Link to="/login" onClick={() => setMenuOpen(false)} className="block text-sm text-gray-700 py-1">
+            <Link
+              to="/login"
+              onClick={() => setMenuOpen(false)}
+              className="block text-sm text-gray-700 py-1 hover:text-brand"
+            >
               Sign in
             </Link>
           )}
         </div>
-      )}
+      </div>
     </header>
   );
 }

@@ -11,6 +11,15 @@ import Register from "./pages/Register";
 import Account from "./pages/Account";
 import NotFound from "./pages/NotFound";
 
+// Admin Section
+import AdminLayout from "./pages/admin/AdminLayout";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminProducts from "./pages/admin/AdminProducts";
+import AdminOrders from "./pages/admin/AdminOrders";
+import AdminUsers from "./pages/admin/AdminUsers";
+import AdminCoupons from "./pages/admin/AdminCoupons";
+import AdminReviews from "./pages/admin/AdminReviews";
+
 export default function App() {
   return (
     <Routes>
@@ -26,6 +35,17 @@ export default function App() {
         <Route path="/account/*" element={<Account />} />
         <Route path="*" element={<NotFound />} />
       </Route>
+
+      {/* Admin Panel (uses AdminLayout, outside regular shop Layout) */}
+      <Route path="/admin" element={<AdminLayout />}>
+        <Route index element={<AdminDashboard />} />
+        <Route path="products" element={<AdminProducts />} />
+        <Route path="orders" element={<AdminOrders />} />
+        <Route path="users" element={<AdminUsers />} />
+        <Route path="coupons" element={<AdminCoupons />} />
+        <Route path="reviews" element={<AdminReviews />} />
+      </Route>
     </Routes>
   );
 }
+

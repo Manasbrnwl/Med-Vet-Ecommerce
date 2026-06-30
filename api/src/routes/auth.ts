@@ -32,7 +32,17 @@ router.post("/register", async (req, res) => {
     data: { email, passwordHash, firstName: firstName ?? null, lastName: lastName ?? null, role: "CUSTOMER" },
   });
 
-  res.status(201).json({ token: signToken({ id: user.id, email: user.email, role: user.role }) });
+  res.status(201).json({
+    token: signToken({ id: user.id, email: user.email, role: user.role }),
+    user: {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phone: user.phone,
+      role: user.role,
+    },
+  });
 });
 
 // ── POST /api/auth/login ──────────────────────────────────────────────────────
@@ -59,7 +69,17 @@ router.post("/login", async (req, res) => {
 
   await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
 
-  res.json({ token: signToken({ id: user.id, email: user.email, role: user.role }) });
+  res.json({
+    token: signToken({ id: user.id, email: user.email, role: user.role }),
+    user: {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phone: user.phone,
+      role: user.role,
+    },
+  });
 });
 
 // ── POST /api/auth/reset-request ─────────────────────────────────────────────
@@ -88,7 +108,17 @@ router.post("/reset-confirm", async (req, res) => {
 
   const passwordHash = await bcrypt.hash(password, 12);
   const user = await prisma.user.update({ where: { id: payload.id }, data: { passwordHash, legacyHash: null } });
-  res.json({ token: signToken({ id: user.id, email: user.email, role: user.role }) });
+  res.json({
+    token: signToken({ id: user.id, email: user.email, role: user.role }),
+    user: {
+      id: user.id,
+      email: user.email,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      phone: user.phone,
+      role: user.role,
+    },
+  });
 });
 
 // ── GET /api/auth/me ──────────────────────────────────────────────────────────

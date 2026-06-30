@@ -30,14 +30,14 @@ export default function ProductCard({ product }: Props) {
   return (
     <Link
       to={`/product/${product.slug}`}
-      className="group flex flex-col rounded-xl border border-gray-200 bg-white overflow-hidden hover:shadow-md transition-shadow"
+      className="group flex flex-col rounded-2xl border border-gray-100 bg-white overflow-hidden hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
     >
-      <div className="relative aspect-square bg-gray-50 overflow-hidden">
+      <div className="relative aspect-square bg-gray-50/50 overflow-hidden flex items-center justify-center p-4">
         {img ? (
           <img
             src={img.url}
             alt={img.alt ?? product.name}
-            className="w-full h-full object-contain p-3 group-hover:scale-105 transition-transform duration-300"
+            className="max-h-full max-w-full object-contain group-hover:scale-105 transition-transform duration-500"
             loading="lazy"
           />
         ) : (
@@ -46,37 +46,41 @@ export default function ProductCard({ product }: Props) {
           </div>
         )}
         {!inStock && (
-          <span className="absolute top-2 left-2 text-xs bg-gray-800 text-white px-2 py-0.5 rounded">
+          <span className="absolute top-3 left-3 text-[10px] font-bold uppercase tracking-wider bg-gray-900/90 text-white px-2.5 py-1 rounded-full shadow-xs">
             Out of stock
           </span>
         )}
         {product.salePrice && product.regularPrice && product.salePrice !== product.regularPrice && (
-          <span className="absolute top-2 right-2 text-xs bg-red-500 text-white px-2 py-0.5 rounded">
+          <span className="absolute top-3 right-3 text-[10px] font-bold uppercase tracking-wider bg-red-500 text-white px-2.5 py-1 rounded-full shadow-xs">
             Sale
           </span>
         )}
       </div>
 
-      <div className="flex flex-col flex-1 p-3 gap-1">
-        {product.brand && (
-          <span className="text-xs text-brand font-medium uppercase tracking-wide">
+      <div className="flex flex-col flex-1 p-4 gap-1.5 bg-white border-t border-gray-50">
+        {product.brand ? (
+          <span className="text-[10px] text-brand font-bold uppercase tracking-widest block">
             {product.brand.name}
           </span>
+        ) : (
+          <span className="text-[10px] text-gray-400 font-medium uppercase tracking-widest block">
+            General
+          </span>
         )}
-        <h3 className="text-sm font-medium text-gray-800 line-clamp-2 leading-snug">
+        <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 leading-snug group-hover:text-brand transition-colors">
           {product.name}
         </h3>
-        <div className="mt-auto pt-2 flex items-center justify-between">
+        <div className="mt-auto pt-3 flex items-center justify-between">
           <PriceDisplay
             price={product.price}
             regularPrice={product.regularPrice}
             salePrice={product.salePrice}
-            className="text-sm"
+            className="text-base font-bold text-gray-950"
           />
           {inStock && product.price && (
             <button
               onClick={handleAddToCart}
-              className="p-1.5 rounded-lg bg-brand text-white hover:bg-brand-dark transition-colors"
+              className="p-2 rounded-xl bg-teal-50 text-brand hover:bg-brand hover:text-white transition-all duration-300 shadow-xs hover:shadow-md"
               aria-label={`Add ${product.name} to cart`}
             >
               <ShoppingCart size={16} />
@@ -87,3 +91,4 @@ export default function ProductCard({ product }: Props) {
     </Link>
   );
 }
+

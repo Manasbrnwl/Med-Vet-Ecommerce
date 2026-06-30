@@ -11,6 +11,17 @@ const pageParams = (query: Record<string, unknown>) => ({
   limit: Math.min(100, parseInt(query.limit as string) || 20),
 });
 
+function slugify(text: string) {
+  return text
+    .toString()
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^\w\-]+/g, "")
+    .replace(/\-\-+/g, "-");
+}
+
+
 // ── GET /api/admin/stats ──────────────────────────────────────────────────────
 router.get("/stats", async (_req, res) => {
   const [products, orders, users, pendingOrders, totalRevenue] = await Promise.all([
@@ -28,10 +39,16 @@ router.get("/products", async (req, res) => {
   const { page, limit } = pageParams(req.query);
   const q = (req.query.q as string) ?? "";
   const status = req.query.status as string | undefined;
+  const categoryId = req.query.categoryId ? parseInt(req.query.categoryId as string) : undefined;
+  const brandId = req.query.brandId ? parseInt(req.query.brandId as string) : undefined;
+  const stockStatus = req.query.stockStatus as string | undefined;
 
   const where = {
     ...(q && { OR: [{ name: { contains: q, mode: "insensitive" as const } }, { sku: { contains: q, mode: "insensitive" as const } }] }),
     ...(status && { status: status as never }),
+    ...(categoryId && { categories: { some: { id: categoryId } } }),
+    ...(brandId && { brandId }),
+    ...(stockStatus && { stockStatus: stockStatus as any }),
   };
 
   const [total, data] = await Promise.all([
@@ -64,6 +81,44 @@ router.get("/products/:id", async (req, res) => {
   res.json(product);
 });
 
+const productCreateSchema = z.object({
+  name:             z.string().min(1),
+  type:             z.enum(["SIMPLE", "VARIABLE"]).default("SIMPLE"),
+  status:           z.enum(["PUBLISHED", "DRAFT", "PRIVATE", "TRASH"]).default("PUBLISHED"),
+  sku:              z.string().optional().nullable(),
+  price:            z.number().nonnegative().optional().nullable(),
+  regularPrice:     z.number().nonnegative().optional().nullable(),
+  salePrice:        z.number().nonnegative().optional().nullable(),
+  stockStatus:      z.enum(["IN_STOCK", "OUT_OF_STOCK", "ON_BACKORDER"]).default("IN_STOCK"),
+  stockQuantity:    z.number().int().nonnegative().optional().nullable(),
+  manageStock:      z.boolean().default(false),
+  featured:         z.boolean().default(false),
+  description:      z.string().optional().nullable(),
+  shortDescription: z.string().optional().nullable(),
+});
+
+router.post("/products", async (req, res) => {
+  const body = productCreateSchema.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.flatten() }); return; }
+  const { name, ...data } = body.data;
+  let slug = slugify(name);
+  const existing = await prisma.product.findUnique({ where: { slug } });
+  if (existing) {
+    slug = `${slug}-${Math.floor(1000 + Math.random() * 9000)}`;
+  }
+  const product = await prisma.product.create({
+    data: {
+      name,
+      slug,
+      ...data,
+      price: data.price ?? null,
+      regularPrice: data.regularPrice ?? null,
+      salePrice: data.salePrice ?? null,
+    } as any
+  });
+  res.status(201).json(product);
+});
+
 const productUpdateSchema = z.object({
   name:          z.string().min(1).optional(),
   status:        z.enum(["PUBLISHED", "DRAFT", "PRIVATE", "TRASH"]).optional(),
@@ -93,20 +148,29 @@ router.get("/orders", async (req, res) => {
   const { page, limit } = pageParams(req.query);
   const status = req.query.status as string | undefined;
   const q = req.query.q as string | undefined;
+  const paymentMethod = req.query.paymentMethod as string | undefined;
+  const sort = (req.query.sort as string) ?? "date_desc";
 
   const where = {
     ...(status && { status: status as never }),
+    ...(paymentMethod && { paymentMethod }),
     ...(q && { OR: [
       { customerEmail: { contains: q, mode: "insensitive" as const } },
       { orderKey:      { contains: q, mode: "insensitive" as const } },
     ]}),
   };
 
+  const orderBy =
+    sort === "date_asc" ? { createdAt: "asc" as const } :
+    sort === "total_desc" ? { total: "desc" as const } :
+    sort === "total_asc" ? { total: "asc" as const } :
+    { createdAt: "desc" as const };
+
   const [total, data] = await Promise.all([
     prisma.order.count({ where }),
     prisma.order.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy,
       skip: (page - 1) * limit,
       take: limit,
       select: {
@@ -145,16 +209,21 @@ router.put("/orders/:id", async (req, res) => {
 });
 
 // ── Users ─────────────────────────────────────────────────────────────────────
-router.get("/users", async (req, res) => {
+router.get("/users", requireRole("ADMIN"), async (req, res) => {
   const { page, limit } = pageParams(req.query);
   const q = req.query.q as string | undefined;
-  const where = q ? {
-    OR: [
-      { email:     { contains: q, mode: "insensitive" as const } },
-      { firstName: { contains: q, mode: "insensitive" as const } },
-      { lastName:  { contains: q, mode: "insensitive" as const } },
-    ],
-  } : {};
+  const role = req.query.role as string | undefined;
+
+  const where = {
+    ...(role && { role: role as any }),
+    ...(q && {
+      OR: [
+        { email:     { contains: q, mode: "insensitive" as const } },
+        { firstName: { contains: q, mode: "insensitive" as const } },
+        { lastName:  { contains: q, mode: "insensitive" as const } },
+      ],
+    }),
+  };
 
   const [total, data] = await Promise.all([
     prisma.user.count({ where }),
@@ -189,14 +258,50 @@ router.get("/coupons", async (req, res) => {
   res.json({ data, meta: { total, page, limit, totalPages: Math.ceil(total / limit) } });
 });
 
+const couponCreateSchema = z.object({
+  code:         z.string().min(1).transform(val => val.toUpperCase().trim()),
+  type:         z.enum(["FIXED_CART", "PERCENT", "FIXED_PRODUCT"]).default("FIXED_CART"),
+  amount:       z.number().nonnegative(),
+  description:  z.string().optional().nullable(),
+  freeShipping: z.boolean().default(false),
+  minSpend:     z.number().nonnegative().optional().nullable(),
+  maxSpend:     z.number().nonnegative().optional().nullable(),
+  usageLimit:   z.number().int().positive().optional().nullable(),
+  expiresAt:    z.string().optional().nullable().transform(val => val ? new Date(val) : null),
+});
+
+router.post("/coupons", async (req, res) => {
+  const body = couponCreateSchema.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.flatten() }); return; }
+  const existing = await prisma.coupon.findUnique({ where: { code: body.data.code } });
+  if (existing) { res.status(409).json({ error: "Coupon code already exists" }); return; }
+  const coupon = await prisma.coupon.create({ data: body.data as any });
+  res.status(201).json(coupon);
+});
+
+router.delete("/coupons/:id", async (req, res) => {
+  await prisma.coupon.delete({ where: { id: parseInt(String(req.params.id)) } });
+  res.status(204).end();
+});
+
+
 // ── Reviews ───────────────────────────────────────────────────────────────────
 router.get("/reviews", async (req, res) => {
   const { page, limit } = pageParams(req.query);
   const pending = req.query.pending === "true";
+  const rating = req.query.rating ? parseInt(req.query.rating as string) : undefined;
+  const productId = req.query.productId ? parseInt(req.query.productId as string) : undefined;
+
+  const where = {
+    ...(pending ? { approved: false } : {}),
+    ...(rating && { rating }),
+    ...(productId && { productId }),
+  };
+
   const [total, data] = await Promise.all([
-    prisma.review.count({ where: pending ? { approved: false } : {} }),
+    prisma.review.count({ where }),
     prisma.review.findMany({
-      where: pending ? { approved: false } : {},
+      where,
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * limit,
       take: limit,
