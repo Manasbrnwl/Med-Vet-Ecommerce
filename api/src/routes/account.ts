@@ -148,4 +148,48 @@ router.get("/orders/:id", async (req, res) => {
   res.json(order);
 });
 
+// ── Reviews (verified purchasers) ─────────────────────────────────────────────
+const reviewSchema = z.object({
+  productId: z.number().int().positive(),
+  rating:    z.number().int().min(1).max(5),
+  content:   z.string().max(2000).optional().nullable(),
+});
+
+// Can the current user review this product, and have they already?
+router.get("/reviews/eligibility/:productId", async (req, res) => {
+  const productId = parseInt(String(req.params.productId));
+  const purchased = await prisma.orderItem.findFirst({
+    where: { productId, order: { userId: req.user!.id } },
+    select: { id: true },
+  });
+  const mine = await prisma.review.findFirst({
+    where: { productId, userId: req.user!.id },
+    select: { id: true, rating: true, content: true },
+  });
+  res.json({ canReview: !!purchased, mine });
+});
+
+// Create or update the user's review for a purchased product (auto-approved)
+router.post("/reviews", async (req, res) => {
+  const body = reviewSchema.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: body.error.flatten() }); return; }
+  const { productId, rating, content } = body.data;
+
+  const purchased = await prisma.orderItem.findFirst({
+    where: { productId, order: { userId: req.user!.id } },
+    select: { id: true },
+  });
+  if (!purchased) { res.status(403).json({ error: "You can only review products you've purchased." }); return; }
+
+  const user = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { firstName: true, lastName: true } });
+  const authorName = [user?.firstName, user?.lastName].filter(Boolean).join(" ") || "Customer";
+
+  const existing = await prisma.review.findFirst({ where: { productId, userId: req.user!.id } });
+  const data = { productId, userId: req.user!.id, authorName, rating, content: content ?? null, approved: true };
+  const review = existing
+    ? await prisma.review.update({ where: { id: existing.id }, data })
+    : await prisma.review.create({ data });
+  res.status(201).json(review);
+});
+
 export default router;

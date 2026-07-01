@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import jwt from "jsonwebtoken";
 import { prisma } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
 import { createPaymentRequest, verifyWebhookSignature } from "../lib/hitpay.js";
@@ -40,12 +41,11 @@ router.post("/", async (req, res) => {
   const { items, billing, shipping, couponCode, customerEmail, customerNote } = body.data;
 
   // Auth is optional (guest checkout allowed)
-  let token: string | undefined = req.headers.authorization?.replace("Bearer ", "");
+  const token: string | undefined = req.headers.authorization?.replace("Bearer ", "");
   let userId: number | null = null;
   if (token) {
     try {
-      const { verify } = await import("jsonwebtoken");
-      const p = verify(token, process.env.JWT_SECRET!) as { id: number };
+      const p = jwt.verify(token, process.env.JWT_SECRET!) as { id: number };
       userId = p.id;
     } catch { /* guest */ }
   }
