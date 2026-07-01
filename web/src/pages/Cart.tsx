@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
-import { Trash2, Plus, Minus, ShoppingBag, ArrowRight } from "lucide-react";
-import { useCartStore } from "../store/cart";
+import { Trash2, Plus, Minus, ShoppingBag, ArrowRight, Gift } from "lucide-react";
+import { useCartStore, bonusFreeUnits } from "../store/cart";
 
 export default function Cart() {
   const { items, removeItem, updateQty, total, clearCart } = useCartStore();
@@ -66,6 +66,18 @@ export default function Cart() {
                   S${item.price.toFixed(2)}
                 </p>
 
+                {item.bonusBuyQty && item.bonusFreeQty ? (
+                  bonusFreeUnits(item) > 0 ? (
+                    <p className="mt-1 inline-flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">
+                      <Gift size={12} /> {bonusFreeUnits(item)} free added — you get {item.qty + bonusFreeUnits(item)} total
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs font-semibold text-emerald-600">
+                      Buy {item.bonusBuyQty}, get {item.bonusFreeQty} free — add {item.bonusBuyQty - item.qty} more
+                    </p>
+                  )
+                ) : null}
+
                 <div className="flex items-center gap-2 mt-2">
                   <button
                     onClick={() => updateQty(item.productId, item.variantId, item.qty - 1)}
@@ -102,13 +114,30 @@ export default function Cart() {
         <div className="bg-white rounded-xl border border-gray-100 p-5 h-fit space-y-4 sticky top-20">
           <h2 className="font-semibold text-gray-900">Order Summary</h2>
           <div className="space-y-2 text-sm text-gray-600">
-            {items.map((item) => (
-              <div key={`${item.productId}-${item.variantId}`} className="flex justify-between">
-                <span className="line-clamp-1 flex-1 mr-2">{item.name} ×{item.qty}</span>
-                <span>S${(item.price * item.qty).toFixed(2)}</span>
-              </div>
-            ))}
+            {items.map((item) => {
+              const free = bonusFreeUnits(item);
+              return (
+                <div key={`${item.productId}-${item.variantId}`}>
+                  <div className="flex justify-between">
+                    <span className="line-clamp-1 flex-1 mr-2">{item.name} ×{item.qty}</span>
+                    <span>S${(item.price * item.qty).toFixed(2)}</span>
+                  </div>
+                  {free > 0 && (
+                    <div className="flex justify-between text-emerald-600 text-xs font-semibold">
+                      <span>+ {free} free (bonus)</span>
+                      <span>S$0.00</span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
+          {items.some((i) => bonusFreeUnits(i) > 0) && (
+            <div className="flex justify-between text-sm text-emerald-700 font-semibold">
+              <span>Free bonus units</span>
+              <span>{items.reduce((n, i) => n + bonusFreeUnits(i), 0)}</span>
+            </div>
+          )}
           <div className="border-t border-gray-100 pt-3 flex justify-between font-semibold text-gray-900">
             <span>Total</span>
             <span>S${total().toFixed(2)}</span>

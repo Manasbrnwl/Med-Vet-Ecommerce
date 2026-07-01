@@ -12,6 +12,8 @@ export interface ProductSummary {
   stockQuantity: number | null;
   manageStock: boolean;
   sku: string | null;
+  bonusBuyQty: number | null;
+  bonusFreeQty: number | null;
   images: { url: string; alt: string | null }[];
   brand: { id: number; name: string; slug: string } | null;
   categories: { id: number; name: string; slug: string }[];

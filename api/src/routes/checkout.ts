@@ -54,14 +54,14 @@ router.post("/", async (req, res) => {
   let subtotal = 0;
   const resolvedItems: Array<{
     productId: number; variantId: number | null;
-    name: string; sku: string | null; quantity: number;
+    name: string; sku: string | null; quantity: number; bonusQuantity: number;
     subtotal: number; total: number; taxTotal: number;
   }> = [];
 
   for (const item of items) {
     const product = await prisma.product.findUnique({
       where: { id: item.productId },
-      select: { id: true, name: true, price: true, sku: true, stockStatus: true, manageStock: true, stockQuantity: true },
+      select: { id: true, name: true, price: true, sku: true, stockStatus: true, manageStock: true, stockQuantity: true, bonusBuyQty: true, bonusFreeQty: true },
     });
     if (!product) { res.status(422).json({ error: `Product ${item.productId} not found` }); return; }
 
@@ -87,11 +87,17 @@ router.post("/", async (req, res) => {
       }
     }
 
+    // Bulk bonus: buy N get M extra free, repeating per multiple. Charged qty is unchanged.
+    const bonusQuantity =
+      product.bonusBuyQty && product.bonusFreeQty && product.bonusBuyQty > 0
+        ? Math.floor(item.qty / product.bonusBuyQty) * product.bonusFreeQty
+        : 0;
+
     const lineTotal = price * item.qty;
     subtotal += lineTotal;
     resolvedItems.push({
       productId: item.productId, variantId: item.variantId ?? null,
-      name: product.name, sku, quantity: item.qty,
+      name: product.name, sku, quantity: item.qty, bonusQuantity,
       subtotal: lineTotal, total: lineTotal, taxTotal: 0,
     });
   }

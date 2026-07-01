@@ -59,6 +59,8 @@ export default function AdminProducts() {
   const [formManageStock, setFormManageStock] = useState(false);
   const [formDescription, setFormDescription] = useState("");
   const [formStatus, setFormStatus] = useState<"PUBLISHED" | "DRAFT" | "PRIVATE">("PUBLISHED");
+  const [formBonusBuy, setFormBonusBuy] = useState<number | "">("");
+  const [formBonusFree, setFormBonusFree] = useState<number | "">("");
 
   // Query products
   const { data, isLoading } = useQuery<ProductsResponse>({
@@ -121,6 +123,8 @@ export default function AdminProducts() {
     setFormManageStock(false);
     setFormDescription("");
     setFormStatus("PUBLISHED");
+    setFormBonusBuy("");
+    setFormBonusFree("");
     setErrorMsg("");
   }
 
@@ -138,6 +142,8 @@ export default function AdminProducts() {
       setFormManageStock(fullP.manageStock);
       setFormDescription(fullP.description || "");
       setFormStatus(fullP.status === "TRASH" ? "DRAFT" : fullP.status);
+      setFormBonusBuy(fullP.bonusBuyQty ?? "");
+      setFormBonusFree(fullP.bonusFreeQty ?? "");
     });
   }
 
@@ -155,6 +161,8 @@ export default function AdminProducts() {
       manageStock: formManageStock,
       description: formDescription || null,
       status: formStatus,
+      bonusBuyQty: formBonusBuy === "" ? null : Number(formBonusBuy),
+      bonusFreeQty: formBonusFree === "" ? null : Number(formBonusFree),
     });
   }
 
@@ -173,6 +181,8 @@ export default function AdminProducts() {
         stockQuantity: formStockQuantity === "" ? null : Number(formStockQuantity),
         featured: editingProduct.featured,
         description: formDescription || null,
+        bonusBuyQty: formBonusBuy === "" ? null : Number(formBonusBuy),
+        bonusFreeQty: formBonusFree === "" ? null : Number(formBonusFree),
       },
     });
   }
@@ -582,6 +592,35 @@ export default function AdminProducts() {
                     </select>
                   </div>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
+                  Bulk Bonus Offer (optional)
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <input
+                      type="number" min="1" placeholder="Buy qty (e.g. 11)"
+                      value={formBonusBuy}
+                      onChange={(e) => setFormBonusBuy(e.target.value === "" ? "" : Number(e.target.value))}
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand/20"
+                    />
+                  </div>
+                  <div>
+                    <input
+                      type="number" min="1" placeholder="Free qty (e.g. 1)"
+                      value={formBonusFree}
+                      onChange={(e) => setFormBonusFree(e.target.value === "" ? "" : Number(e.target.value))}
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand/20"
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">
+                  {formBonusBuy && formBonusFree
+                    ? `Customers who buy ${formBonusBuy} get ${formBonusFree} extra free (repeats per multiple). Leave blank for no offer.`
+                    : "e.g. 11 + 1 → buy 11, get 1 free. Leave both blank for no offer."}
+                </p>
               </div>
 
               <div>

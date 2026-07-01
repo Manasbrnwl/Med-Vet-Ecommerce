@@ -124,6 +124,9 @@ model Product {
   featured         Boolean            @default(false)
   totalSales       Int                @default(0)
   externalUrl      String?
+  // bulk bonus offer: buy `bonusBuyQty`, get `bonusFreeQty` extra free (per multiple). null = none
+  bonusBuyQty      Int?
+  bonusFreeQty     Int?
   // relations
   brandId          Int?
   brand            Brand?             @relation(fields: [brandId], references: [id])
@@ -324,6 +327,7 @@ model OrderItem {
   name      String
   sku       String?
   quantity  Int             @default(1)
+  bonusQuantity Int         @default(0) // free units delivered via a bulk bonus offer
   subtotal  Decimal         @default(0) @db.Decimal(12, 2)
   total     Decimal         @default(0) @db.Decimal(12, 2)
   taxTotal  Decimal         @default(0) @db.Decimal(12, 2)

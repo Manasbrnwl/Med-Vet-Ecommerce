@@ -10,6 +10,14 @@ export interface CartItem {
   qty: number;
   image: string | null;
   sku: string | null;
+  bonusBuyQty?: number | null;   // buy N ...
+  bonusFreeQty?: number | null;  // ... get M extra free (per multiple)
+}
+
+/** Free units earned on a line via its bulk bonus (buy N get M extra free). */
+export function bonusFreeUnits(item: Pick<CartItem, "qty" | "bonusBuyQty" | "bonusFreeQty">): number {
+  if (!item.bonusBuyQty || !item.bonusFreeQty || item.bonusBuyQty <= 0) return 0;
+  return Math.floor(item.qty / item.bonusBuyQty) * item.bonusFreeQty;
 }
 
 interface CartState {

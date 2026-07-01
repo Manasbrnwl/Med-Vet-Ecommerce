@@ -34,6 +34,68 @@ router.get("/stats", async (_req, res) => {
   res.json({ products, orders, users, pendingOrders, totalRevenue: totalRevenue._sum.total ?? 0 });
 });
 
+// ── Sales report: units sold per product ──────────────────────────────────────
+router.get("/sales/products", async (req, res) => {
+  const { page, limit } = pageParams(req.query);
+  const grouped = await prisma.orderItem.groupBy({
+    by: ["productId"],
+    where: { productId: { not: null } },
+    _sum: { quantity: true, bonusQuantity: true, total: true },
+    _count: { _all: true },
+    orderBy: { _sum: { quantity: "desc" } },
+    skip: (page - 1) * limit,
+    take: limit,
+  });
+  const ids = grouped.map((g) => g.productId!).filter(Boolean);
+  const products = await prisma.product.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, name: true, sku: true, slug: true, stockQuantity: true, stockStatus: true },
+  });
+  const pmap = new Map(products.map((p) => [p.id, p]));
+  const data = grouped.map((g) => {
+    const p = pmap.get(g.productId!);
+    return {
+      productId: g.productId,
+      name: p?.name ?? "(deleted product)",
+      sku: p?.sku ?? null,
+      slug: p?.slug ?? null,
+      stockQuantity: p?.stockQuantity ?? null,
+      stockStatus: p?.stockStatus ?? null,
+      unitsSold: g._sum.quantity ?? 0,
+      bonusUnits: g._sum.bonusQuantity ?? 0,
+      revenue: g._sum.total ?? 0,
+      orders: g._count._all,
+    };
+  });
+  const distinct = await prisma.orderItem.findMany({ where: { productId: { not: null } }, distinct: ["productId"], select: { productId: true } });
+  res.json({ data, meta: { total: distinct.length, page, limit, totalPages: Math.ceil(distinct.length / limit) } });
+});
+
+// ── Sales report: who ordered a given product ─────────────────────────────────
+router.get("/sales/products/:id/customers", async (req, res) => {
+  const productId = parseInt(String(req.params.id));
+  const rows = await prisma.orderItem.findMany({
+    where: { productId },
+    select: {
+      quantity: true, bonusQuantity: true, total: true,
+      order: { select: { id: true, customerEmail: true, status: true, createdAt: true, user: { select: { firstName: true, lastName: true } } } },
+    },
+    orderBy: { id: "desc" },
+    take: 300,
+  });
+  const data = rows.map((r) => ({
+    orderId: r.order.id,
+    customer: [r.order.user?.firstName, r.order.user?.lastName].filter(Boolean).join(" ") || r.order.customerEmail,
+    email: r.order.customerEmail,
+    status: r.order.status,
+    date: r.order.createdAt,
+    units: r.quantity,
+    bonus: r.bonusQuantity,
+    total: r.total,
+  }));
+  res.json({ data });
+});
+
 // ── Products ──────────────────────────────────────────────────────────────────
 router.get("/products", async (req, res) => {
   const { page, limit } = pageParams(req.query);
@@ -62,7 +124,7 @@ router.get("/products", async (req, res) => {
         id: true, slug: true, name: true, status: true, type: true, sku: true,
         price: true, regularPrice: true, salePrice: true,
         stockStatus: true, stockQuantity: true, manageStock: true,
-        totalSales: true, featured: true, createdAt: true, updatedAt: true,
+        totalSales: true, featured: true, bonusBuyQty: true, bonusFreeQty: true, createdAt: true, updatedAt: true,
         images: { where: { isPrimary: true }, take: 1, select: { url: true } },
         brand: { select: { name: true, slug: true } },
         _count: { select: { variants: true } },
@@ -95,6 +157,8 @@ const productCreateSchema = z.object({
   featured:         z.boolean().default(false),
   description:      z.string().optional().nullable(),
   shortDescription: z.string().optional().nullable(),
+  bonusBuyQty:      z.number().int().positive().optional().nullable(),
+  bonusFreeQty:     z.number().int().positive().optional().nullable(),
 });
 
 router.post("/products", async (req, res) => {
@@ -129,6 +193,8 @@ const productUpdateSchema = z.object({
   stockQuantity: z.number().int().nonnegative().nullable().optional(),
   featured:      z.boolean().optional(),
   description:   z.string().optional(),
+  bonusBuyQty:   z.number().int().positive().nullable().optional(),
+  bonusFreeQty:  z.number().int().positive().nullable().optional(),
 });
 
 router.put("/products/:id", async (req, res) => {

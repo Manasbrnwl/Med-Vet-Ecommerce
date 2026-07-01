@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Helmet } from "react-helmet-async";
-import { ShoppingCart, ArrowLeft, Package, Sparkles, Scale, CheckCircle2 } from "lucide-react";
+import { ShoppingCart, ArrowLeft, Package, Sparkles, Scale, CheckCircle2, Gift } from "lucide-react";
 import { api } from "../api/client";
 import type { ProductDetail as ProductDetailType, ProductVariant } from "../api/types";
 import PriceDisplay from "../components/PriceDisplay";
@@ -76,6 +76,8 @@ export default function ProductDetail() {
       price: Number(displayPrice ?? displayRegular ?? 0),
       image: currentImg?.url ?? null,
       sku: activeVariant?.sku ?? product!.sku,
+      bonusBuyQty: product!.bonusBuyQty,
+      bonusFreeQty: product!.bonusFreeQty,
       qty,
     });
   }
@@ -239,6 +241,21 @@ export default function ProductDetail() {
               </div>
             </div>
           )}
+
+          {/* Bulk bonus offer */}
+          {product.bonusBuyQty && product.bonusFreeQty ? (
+            <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl px-4 py-3">
+              <Gift size={18} className="flex-shrink-0" />
+              <span className="text-sm font-bold">
+                Bulk bonus: buy {product.bonusBuyQty}, get {product.bonusFreeQty} free
+                {qty >= product.bonusBuyQty && (
+                  <span className="ml-1 font-semibold">
+                    — you’ll get {Math.floor(qty / product.bonusBuyQty) * product.bonusFreeQty} free ({qty + Math.floor(qty / product.bonusBuyQty) * product.bonusFreeQty} total)
+                  </span>
+                )}
+              </span>
+            </div>
+          ) : null}
 
           {/* Adding parameters & Actions */}
           <div className="space-y-4 pt-2">

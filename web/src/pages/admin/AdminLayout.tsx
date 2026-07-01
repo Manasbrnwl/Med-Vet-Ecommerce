@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Navigate, Outlet, NavLink } from "react-router-dom";
-import { LayoutDashboard, ShoppingBag, ClipboardList, Users, Ticket, Star, ArrowLeft, Menu, X } from "lucide-react";
+import { LayoutDashboard, ShoppingBag, ClipboardList, TrendingUp, Users, Ticket, Star, ArrowLeft, Menu, X } from "lucide-react";
 import { useAuthStore } from "../../store/auth";
 
 export default function AdminLayout() {
@@ -15,6 +15,7 @@ export default function AdminLayout() {
     { label: "Dashboard", path: "/admin", icon: <LayoutDashboard size={18} /> },
     { label: "Products", path: "/admin/products", icon: <ShoppingBag size={18} /> },
     { label: "Orders", path: "/admin/orders", icon: <ClipboardList size={18} /> },
+    { label: "Sales", path: "/admin/sales", icon: <TrendingUp size={18} /> },
     ...(user.role === "ADMIN" ? [{ label: "Users & Roles", path: "/admin/users", icon: <Users size={18} /> }] : []),
     { label: "Coupons", path: "/admin/coupons", icon: <Ticket size={18} /> },
     { label: "Reviews", path: "/admin/reviews", icon: <Star size={18} /> },
