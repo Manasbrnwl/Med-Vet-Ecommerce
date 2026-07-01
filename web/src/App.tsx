@@ -8,6 +8,7 @@ import Checkout from "./pages/Checkout";
 import CheckoutSuccess from "./pages/CheckoutSuccess";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import ResetPassword from "./pages/ResetPassword";
 import Account from "./pages/Account";
 import NotFound from "./pages/NotFound";
 
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="/checkout" element={<Checkout />} />
         <Route path="/checkout/success" element={<CheckoutSuccess />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/reset" element={<ResetPassword />} />
         <Route path="/register" element={<Register />} />
         <Route path="/account/*" element={<Account />} />
         <Route path="*" element={<NotFound />} />

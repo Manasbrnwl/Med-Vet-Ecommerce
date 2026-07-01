@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { View, Text, StyleSheet, ActivityIndicator } from "react-native";
 import { useRouter, Link, Href } from "expo-router";
-import { Screen, Button, Field, Input } from "../../components/ui";
+import { Ionicons } from "@expo/vector-icons";
+import { Screen, Button, Field, Input, Card } from "../../components/ui";
 import { api, ApiError } from "../../api/client";
 import { useAuthStore } from "../../store/auth";
 import type { AuthResponse } from "../../api/types";
@@ -13,30 +14,23 @@ export default function Login() {
   const [mode, setMode] = useState<"login" | "reset">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [newPassword, setNewPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  function done(res: AuthResponse) {
-    setAuth(res.token, res.user);
-    if (router.canGoBack()) router.back();
-    else router.replace("/(tabs)/account" as Href);
-  }
+  const [resetSent, setResetSent] = useState(false);
 
   async function submitLogin() {
     if (!email.trim() || !password) { setError("Enter your email and password."); return; }
     setError(null);
     setLoading(true);
     try {
-      done(await api.post<AuthResponse>("/auth/login", { email: email.trim().toLowerCase(), password }));
+      const res = await api.post<AuthResponse>("/auth/login", { email: email.trim().toLowerCase(), password });
+      setAuth(res.token, res.user);
+      if (router.canGoBack()) router.back();
+      else router.replace("/(tabs)/account" as Href);
     } catch (e) {
       const err = e as ApiError;
-      if (err.status === 403) {
-        setMode("reset");
-        setError(null);
-      } else {
-        setError(err.status === 401 ? "Invalid email or password." : err.message || "Login failed.");
-      }
+      if (err.status === 403) { setMode("reset"); setError(null); }
+      else setError(err.status === 401 ? "Invalid email or password." : err.message || "Login failed.");
     } finally {
       setLoading(false);
     }
@@ -44,15 +38,13 @@ export default function Login() {
 
   async function submitReset() {
     if (!email.trim()) { setError("Enter your email."); return; }
-    if (newPassword.length < 8) { setError("Password must be at least 8 characters."); return; }
     setError(null);
     setLoading(true);
     try {
-      const rr = await api.post<{ dev_token?: string }>("/auth/reset-request", { email: email.trim().toLowerCase() });
-      if (!rr.dev_token) { setError("Couldn’t start a reset for that email. Contact support."); return; }
-      done(await api.post<AuthResponse>("/auth/reset-confirm", { token: rr.dev_token, password: newPassword }));
+      await api.post("/auth/reset-request", { email: email.trim().toLowerCase() });
+      setResetSent(true);
     } catch (e) {
-      setError((e as ApiError).message || "Reset failed.");
+      setError((e as ApiError).message || "Couldn’t send the reset email.");
     } finally {
       setLoading(false);
     }
@@ -62,15 +54,23 @@ export default function Login() {
     return (
       <Screen scroll>
         <Text style={s.title}>Reset your password</Text>
-        <Text style={s.sub}>Accounts from our old site need a new password. Set one to sign in.</Text>
-        {error ? <Text style={s.error}>{error}</Text> : null}
-        <Field label="Email"><Input value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" placeholder="you@example.com" /></Field>
-        <Field label="New password (min 8)"><Input value={newPassword} onChangeText={setNewPassword} secureTextEntry placeholder="••••••••" /></Field>
-        <Button title={loading ? "Setting password…" : "Set password & sign in"} onPress={submitReset} disabled={loading} />
-        {loading ? <ActivityIndicator style={{ marginTop: 10 }} color={colors.brand} /> : null}
+        <Text style={s.sub}>Enter your email — we'll send a link to set a new password.</Text>
+        {resetSent ? (
+          <Card style={{ alignItems: "center", gap: 6, paddingVertical: 22 }}>
+            <Ionicons name="mail-outline" size={30} color={colors.success} />
+            <Text style={s.sentTitle}>Check your email</Text>
+            <Text style={s.sentText}>If an account exists for {email}, a reset link is on its way (valid 1 hour). Open it to set a new password, then sign in.</Text>
+          </Card>
+        ) : (
+          <>
+            {error ? <Text style={s.error}>{error}</Text> : null}
+            <Field label="Email"><Input value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" placeholder="you@example.com" /></Field>
+            <Button title={loading ? "Sending…" : "Send reset link"} onPress={submitReset} disabled={loading} />
+            {loading ? <ActivityIndicator style={{ marginTop: 10 }} color={colors.brand} /> : null}
+          </>
+        )}
         <View style={s.footer}>
-          <Text style={s.muted}>Remembered it? </Text>
-          <Text style={s.link} onPress={() => { setMode("login"); setError(null); }}>Back to sign in</Text>
+          <Text style={s.link} onPress={() => { setMode("login"); setResetSent(false); setError(null); }}>Back to sign in</Text>
         </View>
       </Screen>
     );
@@ -106,4 +106,6 @@ const s = StyleSheet.create({
   footer: { flexDirection: "row", justifyContent: "center", marginTop: 16 },
   muted: { color: colors.muted },
   link: { color: colors.brand, fontWeight: "700" },
+  sentTitle: { fontSize: 16, fontWeight: "800", color: colors.text },
+  sentText: { fontSize: 13, color: colors.muted, textAlign: "center", lineHeight: 19 },
 });

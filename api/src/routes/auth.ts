@@ -4,6 +4,7 @@ import jwt from "jsonwebtoken";
 import { z } from "zod";
 import { prisma } from "../db.js";
 import { requireAuth } from "../middleware/auth.js";
+import { mailerEnabled, sendPasswordReset } from "../lib/mailer.js";
 
 const router = Router();
 
@@ -83,16 +84,34 @@ router.post("/login", async (req, res) => {
 });
 
 // ── POST /api/auth/reset-request ─────────────────────────────────────────────
-// Stub: in prod, send email. For now returns a token directly (dev only).
+// Emails a reset link containing a signed, 1-hour token to the registered address.
 router.post("/reset-request", async (req, res) => {
   const { email } = z.object({ email: z.string().email() }).parse(req.body);
   const user = await prisma.user.findUnique({ where: { email } });
-  // Always return 200 to avoid email enumeration
-  if (!user) { res.json({ message: "If that email exists, a reset link was sent" }); return; }
+  // Always return the same message to avoid email enumeration.
+  const generic = { message: "If that email exists, a reset link has been sent." };
+  if (!user) { res.json(generic); return; }
 
-  // In production: send email with signed JWT reset token
   const resetToken = jwt.sign({ id: user.id, purpose: "reset" }, process.env.JWT_SECRET!, { expiresIn: "1h" });
-  res.json({ message: "If that email exists, a reset link was sent", dev_token: resetToken });
+  const base = (process.env.SITE_URL ?? "https://vetbuddy-ecom-shop.pages.dev").replace(/\/$/, "");
+  const link = `${base}/reset?token=${resetToken}`;
+
+  if (mailerEnabled) {
+    try {
+      await sendPasswordReset(user.email, link);
+      res.json(generic);
+      return;
+    } catch (e) {
+      console.error("[reset] email send failed:", e);
+      // In production, surface a soft error; in dev, fall through to the token.
+      if (process.env.NODE_ENV === "production") {
+        res.status(502).json({ error: "Could not send the reset email right now. Please try again shortly." });
+        return;
+      }
+    }
+  }
+  // Dev/no-SMTP fallback: return the token so the flow is still testable.
+  res.json({ ...generic, dev_token: resetToken });
 });
 
 // ── POST /api/auth/reset-confirm ──────────────────────────────────────────────

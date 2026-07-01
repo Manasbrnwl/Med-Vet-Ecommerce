@@ -50,29 +50,22 @@ export default function Login() {
     }
   }
 
-  // ── Reset flow ──────────────────────────────────────────────────────────────
+  // ── Reset flow (email a link) ─────────────────────────────────────────────────
   const [resetEmail, setResetEmail] = useState(getValues("email") ?? "");
-  const [resetPass, setResetPass] = useState("");
   const [resetErr, setResetErr] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
   async function onReset(e: React.FormEvent) {
     e.preventDefault();
     setResetErr("");
     if (!/^\S+@\S+\.\S+$/.test(resetEmail)) { setResetErr("Enter a valid email."); return; }
-    if (resetPass.length < 8) { setResetErr("Password must be at least 8 characters."); return; }
     setResetLoading(true);
     try {
-      const rr = await api.post<{ dev_token?: string }>("/auth/reset-request", { email: resetEmail.trim().toLowerCase() });
-      if (!rr.dev_token) { setResetErr("Couldn’t start a reset for that email. Please contact support."); return; }
-      const res = await api.post<{ token: string; user: AuthUser }>("/auth/reset-confirm", {
-        token: rr.dev_token,
-        password: resetPass,
-      });
-      setAuth(res.token, res.user);
-      navigate(from, { replace: true });
+      await api.post("/auth/reset-request", { email: resetEmail.trim().toLowerCase() });
+      setResetSent(true);
     } catch (err: unknown) {
-      setResetErr((err as { message?: string }).message ?? "Reset failed. Please try again.");
+      setResetErr((err as { message?: string }).message ?? "Couldn’t send the reset email. Please try again.");
     } finally {
       setResetLoading(false);
     }
@@ -89,33 +82,37 @@ export default function Login() {
           <>
             <h1 className="text-2xl font-bold text-gray-900 mb-1 text-center">Reset your password</h1>
             <p className="text-sm text-gray-500 text-center mb-6">
-              Accounts from our old site need a new password. Set one below to sign in.
+              Enter your email and we'll send you a link to set a new password.
             </p>
 
-            {resetErr && (
-              <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">{resetErr}</div>
+            {resetSent ? (
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm rounded-2xl px-5 py-6 text-center">
+                <p className="font-semibold mb-1">Check your email</p>
+                <p>If an account exists for <strong>{resetEmail}</strong>, a reset link is on its way. The link is valid for 1 hour.</p>
+              </div>
+            ) : (
+              <>
+                {resetErr && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-4">{resetErr}</div>
+                )}
+                <form onSubmit={onReset} className="space-y-4 bg-white border border-gray-100 rounded-2xl p-6">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+                    <input type="email" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} className={inputCls} />
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={resetLoading}
+                    className="w-full bg-brand text-white py-2.5 rounded-xl font-medium hover:bg-brand-dark transition-colors disabled:opacity-60"
+                  >
+                    {resetLoading ? "Sending…" : "Send reset link"}
+                  </button>
+                </form>
+              </>
             )}
 
-            <form onSubmit={onReset} className="space-y-4 bg-white border border-gray-100 rounded-2xl p-6">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
-                <input type="email" value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">New password (min 8 characters)</label>
-                <input type="password" value={resetPass} onChange={(e) => setResetPass(e.target.value)} className={inputCls} />
-              </div>
-              <button
-                type="submit"
-                disabled={resetLoading}
-                className="w-full bg-brand text-white py-2.5 rounded-xl font-medium hover:bg-brand-dark transition-colors disabled:opacity-60"
-              >
-                {resetLoading ? "Setting password…" : "Set password & sign in"}
-              </button>
-            </form>
-
             <p className="text-sm text-gray-500 text-center mt-4">
-              <button onClick={() => setMode("login")} className="text-brand hover:underline">Back to sign in</button>
+              <button onClick={() => { setMode("login"); setResetSent(false); }} className="text-brand hover:underline">Back to sign in</button>
             </p>
           </>
         ) : (
