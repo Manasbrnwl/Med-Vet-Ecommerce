@@ -1,10 +1,14 @@
 import { Router } from "express";
 import { z } from "zod";
+import multer from "multer";
 import { prisma } from "../db.js";
 import { requireAuth, requireRole } from "../middleware/auth.js";
+import { uploadProductImage, deleteObjectByUrl, s3Enabled } from "../lib/s3.js";
 
 const router = Router();
 router.use(requireAuth, requireRole("ADMIN", "SHOP_MANAGER"));
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
 
 const pageParams = (query: Record<string, unknown>) => ({
   page:  Math.max(1, parseInt(query.page as string) || 1),
@@ -186,13 +190,13 @@ router.post("/products", async (req, res) => {
 const productUpdateSchema = z.object({
   name:          z.string().min(1).optional(),
   status:        z.enum(["PUBLISHED", "DRAFT", "PRIVATE", "TRASH"]).optional(),
-  price:         z.number().nonnegative().optional(),
-  regularPrice:  z.number().nonnegative().optional(),
+  price:         z.number().nonnegative().nullable().optional(),
+  regularPrice:  z.number().nonnegative().nullable().optional(),
   salePrice:     z.number().nonnegative().nullable().optional(),
   stockStatus:   z.enum(["IN_STOCK", "OUT_OF_STOCK", "ON_BACKORDER"]).optional(),
   stockQuantity: z.number().int().nonnegative().nullable().optional(),
   featured:      z.boolean().optional(),
-  description:   z.string().optional(),
+  description:   z.string().nullable().optional(),
   bonusBuyQty:   z.number().int().positive().nullable().optional(),
   bonusFreeQty:  z.number().int().positive().nullable().optional(),
 });
@@ -207,6 +211,58 @@ router.put("/products/:id", async (req, res) => {
 router.delete("/products/:id", async (req, res) => {
   await prisma.product.update({ where: { id: parseInt(String(req.params.id)) }, data: { status: "TRASH" } });
   res.status(204).end();
+});
+
+// ── Product images ────────────────────────────────────────────────────────────
+// Upload a new image for a product (multipart field: "image"). First image becomes primary.
+router.post("/products/:id/images", upload.single("image"), async (req, res) => {
+  if (!s3Enabled) { res.status(503).json({ error: "Image storage is not configured on the server." }); return; }
+  const productId = parseInt(String(req.params.id));
+  const product = await prisma.product.findUnique({ where: { id: productId }, select: { id: true } });
+  if (!product) { res.status(404).json({ error: "Product not found" }); return; }
+  const file = req.file;
+  if (!file) { res.status(400).json({ error: "No image file provided" }); return; }
+  if (!file.mimetype.startsWith("image/")) { res.status(400).json({ error: "File must be an image" }); return; }
+
+  let uploaded;
+  try {
+    uploaded = await uploadProductImage(file.buffer, file.originalname, file.mimetype);
+  } catch (e) {
+    res.status(502).json({ error: (e as Error).message || "Upload failed" }); return;
+  }
+
+  const count = await prisma.productImage.count({ where: { productId } });
+  const image = await prisma.productImage.create({
+    data: { productId, url: uploaded.url, alt: file.originalname, position: count, isPrimary: count === 0 },
+  });
+  res.status(201).json(image);
+});
+
+// Delete a product image.
+router.delete("/products/:id/images/:imageId", async (req, res) => {
+  const productId = parseInt(String(req.params.id));
+  const imageId = parseInt(String(req.params.imageId));
+  const image = await prisma.productImage.findFirst({ where: { id: imageId, productId } });
+  if (!image) { res.status(404).json({ error: "Image not found" }); return; }
+  await prisma.productImage.delete({ where: { id: imageId } });
+  await deleteObjectByUrl(image.url);
+  // If we removed the primary, promote the next one.
+  if (image.isPrimary) {
+    const next = await prisma.productImage.findFirst({ where: { productId }, orderBy: { position: "asc" } });
+    if (next) await prisma.productImage.update({ where: { id: next.id }, data: { isPrimary: true } });
+  }
+  res.status(204).end();
+});
+
+// Set an image as the product's primary.
+router.put("/products/:id/images/:imageId/primary", async (req, res) => {
+  const productId = parseInt(String(req.params.id));
+  const imageId = parseInt(String(req.params.imageId));
+  const image = await prisma.productImage.findFirst({ where: { id: imageId, productId } });
+  if (!image) { res.status(404).json({ error: "Image not found" }); return; }
+  await prisma.productImage.updateMany({ where: { productId, isPrimary: true }, data: { isPrimary: false } });
+  await prisma.productImage.update({ where: { id: imageId }, data: { isPrimary: true } });
+  res.json({ ok: true });
 });
 
 // ── Orders ────────────────────────────────────────────────────────────────────

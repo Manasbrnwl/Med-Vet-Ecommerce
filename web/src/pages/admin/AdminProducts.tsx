@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Search, Plus, Edit, Trash2, X, AlertCircle } from "lucide-react";
-import { api } from "../../api/client";
+import { Search, Plus, Edit, Trash2, X, AlertCircle, Upload, Star, Loader2 } from "lucide-react";
+import { api, apiErrorMessage } from "../../api/client";
 import type { ProductSummary, ListMeta, Category, Brand } from "../../api/types";
 
 interface ProductsResponse {
@@ -61,6 +61,9 @@ export default function AdminProducts() {
   const [formStatus, setFormStatus] = useState<"PUBLISHED" | "DRAFT" | "PRIVATE">("PUBLISHED");
   const [formBonusBuy, setFormBonusBuy] = useState<number | "">("");
   const [formBonusFree, setFormBonusFree] = useState<number | "">("");
+  const [formImages, setFormImages] = useState<{ id: number; url: string; isPrimary: boolean }[]>([]);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [imgBusy, setImgBusy] = useState(false);
 
   // Query products
   const { data, isLoading } = useQuery<ProductsResponse>({
@@ -80,14 +83,21 @@ export default function AdminProducts() {
 
   // Mutate create
   const createMutation = useMutation({
-    mutationFn: (newProduct: any) => api.post("/admin/products", newProduct),
-    onSuccess: () => {
+    mutationFn: (newProduct: any) => api.post<{ id: number }>("/admin/products", newProduct),
+    onSuccess: async (created) => {
+      if (pendingFile && created?.id) {
+        try {
+          await uploadToProduct(created.id, pendingFile);
+        } catch (e) {
+          setErrorMsg(`Product created, but image upload failed: ${apiErrorMessage(e)}`);
+        }
+      }
       queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
       setIsCreateOpen(false);
       resetForm();
     },
-    onError: (err: any) => {
-      setErrorMsg(err.message || "Failed to create product");
+    onError: (err) => {
+      setErrorMsg(apiErrorMessage(err));
     },
   });
 
@@ -99,8 +109,8 @@ export default function AdminProducts() {
       setEditingProduct(null);
       resetForm();
     },
-    onError: (err: any) => {
-      setErrorMsg(err.message || "Failed to update product");
+    onError: (err) => {
+      setErrorMsg(apiErrorMessage(err));
     },
   });
 
@@ -125,6 +135,8 @@ export default function AdminProducts() {
     setFormStatus("PUBLISHED");
     setFormBonusBuy("");
     setFormBonusFree("");
+    setFormImages([]);
+    setPendingFile(null);
     setErrorMsg("");
   }
 
@@ -144,7 +156,60 @@ export default function AdminProducts() {
       setFormStatus(fullP.status === "TRASH" ? "DRAFT" : fullP.status);
       setFormBonusBuy(fullP.bonusBuyQty ?? "");
       setFormBonusFree(fullP.bonusFreeQty ?? "");
+      setFormImages(fullP.images ?? []);
     });
+  }
+
+  // ── Product image actions (edit mode uses the product id directly) ────────────
+  async function uploadToProduct(productId: number, file: File) {
+    const img = await api.upload<{ id: number; url: string; isPrimary: boolean }>(
+      `/admin/products/${productId}/images`,
+      file
+    );
+    return img;
+  }
+
+  async function handleAddImage(file: File) {
+    if (!editingProduct) return;
+    setImgBusy(true);
+    setErrorMsg("");
+    try {
+      const img = await uploadToProduct(editingProduct.id, file);
+      setFormImages((prev) => [...prev, img]);
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+    } catch (e) {
+      setErrorMsg(apiErrorMessage(e));
+    } finally {
+      setImgBusy(false);
+    }
+  }
+
+  async function handleRemoveImage(imageId: number) {
+    if (!editingProduct) return;
+    setImgBusy(true);
+    try {
+      await api.delete(`/admin/products/${editingProduct.id}/images/${imageId}`);
+      setFormImages((prev) => prev.filter((i) => i.id !== imageId));
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+    } catch (e) {
+      setErrorMsg(apiErrorMessage(e));
+    } finally {
+      setImgBusy(false);
+    }
+  }
+
+  async function handleMakePrimary(imageId: number) {
+    if (!editingProduct) return;
+    setImgBusy(true);
+    try {
+      await api.put(`/admin/products/${editingProduct.id}/images/${imageId}/primary`, {});
+      setFormImages((prev) => prev.map((i) => ({ ...i, isPrimary: i.id === imageId })));
+      queryClient.invalidateQueries({ queryKey: ["admin", "products"] });
+    } catch (e) {
+      setErrorMsg(apiErrorMessage(e));
+    } finally {
+      setImgBusy(false);
+    }
   }
 
   function handleCreateSubmit(e: React.FormEvent) {
@@ -474,6 +539,58 @@ export default function AdminProducts() {
                   placeholder="e.g. Premium Cattle Feed"
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand/20"
                 />
+              </div>
+
+              {/* Product images */}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Product Images</label>
+                {editingProduct ? (
+                  <>
+                    {formImages.length > 0 ? (
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {formImages.map((img) => (
+                          <div key={img.id} className="relative w-20 h-20 rounded-lg border border-gray-200 bg-white p-1 group">
+                            <img src={img.url} alt="" className="w-full h-full object-contain" />
+                            {img.isPrimary && (
+                              <span className="absolute top-0.5 left-0.5 bg-brand text-white text-[8px] font-bold px-1 rounded">MAIN</span>
+                            )}
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition rounded-lg flex items-center justify-center gap-1">
+                              {!img.isPrimary && (
+                                <button type="button" onClick={() => handleMakePrimary(img.id)} title="Set as main" className="p-1 bg-white rounded text-brand">
+                                  <Star size={12} />
+                                </button>
+                              )}
+                              <button type="button" onClick={() => handleRemoveImage(img.id)} title="Remove" className="p-1 bg-white rounded text-red-600">
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400 mb-2">No images yet.</p>
+                    )}
+                    <label className="inline-flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg text-xs font-semibold text-gray-600 cursor-pointer hover:bg-gray-50">
+                      {imgBusy ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+                      {imgBusy ? "Uploading…" : "Add image"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={imgBusy}
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) handleAddImage(f); e.target.value = ""; }}
+                      />
+                    </label>
+                  </>
+                ) : (
+                  <>
+                    <label className="flex items-center gap-2 px-3 py-2 border border-dashed border-gray-300 rounded-lg text-xs font-semibold text-gray-600 cursor-pointer hover:bg-gray-50 w-fit">
+                      <Upload size={14} /> {pendingFile ? pendingFile.name : "Choose image"}
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => setPendingFile(e.target.files?.[0] ?? null)} />
+                    </label>
+                    {pendingFile && <p className="text-[11px] text-gray-400 mt-1">Attached when you create the product.</p>}
+                  </>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
