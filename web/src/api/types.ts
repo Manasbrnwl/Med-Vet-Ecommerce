@@ -14,6 +14,8 @@ export interface ProductSummary {
   sku: string | null;
   bonusBuyQty: number | null;
   bonusFreeQty: number | null;
+  expiryDate: string | null;
+  batchNumber: string | null;
   images: { url: string; alt: string | null }[];
   brand: { id: number; name: string; slug: string } | null;
   categories: { id: number; name: string; slug: string }[];

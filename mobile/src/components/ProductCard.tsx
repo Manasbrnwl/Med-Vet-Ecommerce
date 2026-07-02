@@ -2,7 +2,7 @@ import { Pressable, Text, View, StyleSheet } from "react-native";
 import { Image } from "expo-image";
 import { useRouter, Href } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, money, decode } from "../theme";
+import { colors, money, decode, expiryStatus, formatExpiry } from "../theme";
 import type { ProductSummary } from "../api/types";
 
 export function ProductCard({ product, style }: { product: ProductSummary; style?: object }) {
@@ -12,6 +12,8 @@ export function ProductCard({ product, style }: { product: ProductSummary; style
   const reg = product.regularPrice ? Number(product.regularPrice) : null;
   const onSale = reg != null && price != null && reg > price;
   const oos = product.stockStatus === "OUT_OF_STOCK";
+  const expSt = expiryStatus(product.expiryDate);
+  const expired = expSt === "expired";
 
   return (
     <Pressable style={[s.card, style]} onPress={() => router.push(`/product/${product.slug}` as Href)}>
@@ -21,7 +23,15 @@ export function ProductCard({ product, style }: { product: ProductSummary; style
         ) : (
           <View style={s.img} />
         )}
-        {product.bonusBuyQty && product.bonusFreeQty ? (
+        {expired ? (
+          <View style={[s.badge, { backgroundColor: colors.danger }]}>
+            <Text style={s.badgeText}>Expired</Text>
+          </View>
+        ) : expSt === "soon" ? (
+          <View style={[s.badge, { backgroundColor: colors.warning }]}>
+            <Text style={s.badgeText}>Expiring soon</Text>
+          </View>
+        ) : product.bonusBuyQty && product.bonusFreeQty ? (
           <View style={s.badge}>
             <Ionicons name="gift" size={10} color="#fff" />
             <Text style={s.badgeText}>{product.bonusBuyQty}+{product.bonusFreeQty}</Text>
@@ -33,7 +43,12 @@ export function ProductCard({ product, style }: { product: ProductSummary; style
         {price != null ? <Text style={s.price}>{money(price)}</Text> : <Text style={s.muted}>—</Text>}
         {onSale ? <Text style={s.reg}>{money(reg!)}</Text> : null}
       </View>
-      {oos ? <Text style={s.oos}>Out of stock</Text> : null}
+      {product.expiryDate ? (
+        <Text style={[s.exp, { color: expired ? colors.danger : expSt === "soon" ? colors.warning : colors.faint }]}>
+          {expired ? "Expired" : "Exp"}: {formatExpiry(product.expiryDate)}
+        </Text>
+      ) : null}
+      {oos && !expired ? <Text style={s.oos}>Out of stock</Text> : null}
     </Pressable>
   );
 }
@@ -49,5 +64,6 @@ const s = StyleSheet.create({
   price: { fontSize: 15, fontWeight: "800", color: colors.text },
   reg: { fontSize: 12, color: colors.faint, textDecorationLine: "line-through" },
   muted: { color: colors.muted },
+  exp: { fontSize: 11, fontWeight: "700", marginTop: 2 },
   oos: { fontSize: 11, color: colors.danger, fontWeight: "700", marginTop: 2 },
 });

@@ -1,16 +1,17 @@
 FROM node:22-alpine AS base
 WORKDIR /app
 
-# Install deps
+# Install ALL deps (dev deps like typescript + @types are needed to compile)
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci
 
 # Copy source + prisma
 COPY prisma ./prisma
 COPY tsconfig.json ./
 COPY src ./src
 
-# Generate Prisma client + build
+# Generate Prisma client + build (dev deps stay; unused at runtime but keeps the
+# generated Prisma client intact — pruning risks removing .prisma/client)
 RUN npx prisma generate
 RUN npx tsc -p tsconfig.json
 

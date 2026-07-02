@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Search, Plus, Edit, Trash2, X, AlertCircle, Upload, Star, Loader2 } from "lucide-react";
 import { api, apiErrorMessage } from "../../api/client";
 import type { ProductSummary, ListMeta, Category, Brand } from "../../api/types";
+import { expiryStatus, formatExpiry } from "../../utils/expiry";
 
 interface ProductsResponse {
   data: ProductSummary[];
@@ -61,6 +62,8 @@ export default function AdminProducts() {
   const [formStatus, setFormStatus] = useState<"PUBLISHED" | "DRAFT" | "PRIVATE">("PUBLISHED");
   const [formBonusBuy, setFormBonusBuy] = useState<number | "">("");
   const [formBonusFree, setFormBonusFree] = useState<number | "">("");
+  const [formExpiryDate, setFormExpiryDate] = useState<string>("");
+  const [formBatchNumber, setFormBatchNumber] = useState<string>("");
   const [formImages, setFormImages] = useState<{ id: number; url: string; isPrimary: boolean }[]>([]);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [imgBusy, setImgBusy] = useState(false);
@@ -135,6 +138,8 @@ export default function AdminProducts() {
     setFormStatus("PUBLISHED");
     setFormBonusBuy("");
     setFormBonusFree("");
+    setFormExpiryDate("");
+    setFormBatchNumber("");
     setFormImages([]);
     setPendingFile(null);
     setErrorMsg("");
@@ -156,6 +161,8 @@ export default function AdminProducts() {
       setFormStatus(fullP.status === "TRASH" ? "DRAFT" : fullP.status);
       setFormBonusBuy(fullP.bonusBuyQty ?? "");
       setFormBonusFree(fullP.bonusFreeQty ?? "");
+      setFormExpiryDate(fullP.expiryDate ? new Date(fullP.expiryDate).toISOString().slice(0, 10) : "");
+      setFormBatchNumber(fullP.batchNumber || "");
       setFormImages(fullP.images ?? []);
     });
   }
@@ -228,6 +235,8 @@ export default function AdminProducts() {
       status: formStatus,
       bonusBuyQty: formBonusBuy === "" ? null : Number(formBonusBuy),
       bonusFreeQty: formBonusFree === "" ? null : Number(formBonusFree),
+      expiryDate: formExpiryDate || null,
+      batchNumber: formBatchNumber || null,
     });
   }
 
@@ -248,6 +257,8 @@ export default function AdminProducts() {
         description: formDescription || null,
         bonusBuyQty: formBonusBuy === "" ? null : Number(formBonusBuy),
         bonusFreeQty: formBonusFree === "" ? null : Number(formBonusFree),
+        expiryDate: formExpiryDate || null,
+        batchNumber: formBatchNumber || null,
       },
     });
   }
@@ -372,6 +383,7 @@ export default function AdminProducts() {
                 <th className="p-4">Status</th>
                 <th className="p-4">Price</th>
                 <th className="p-4">Stock</th>
+                <th className="p-4">Expiry</th>
                 <th className="p-4 pr-6 text-right">Actions</th>
               </tr>
             </thead>
@@ -384,12 +396,13 @@ export default function AdminProducts() {
                     <td className="p-4"><div className="h-4 bg-gray-100 rounded w-12" /></td>
                     <td className="p-4"><div className="h-4 bg-gray-100 rounded w-14" /></td>
                     <td className="p-4"><div className="h-4 bg-gray-100 rounded w-20" /></td>
+                    <td className="p-4"><div className="h-4 bg-gray-100 rounded w-16" /></td>
                     <td className="p-4 pr-6"><div className="h-4 bg-gray-100 rounded w-12 ml-auto" /></td>
                   </tr>
                 ))
               ) : products.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="p-8 text-center text-gray-500">
+                  <td colSpan={7} className="p-8 text-center text-gray-500">
                     No products found.
                   </td>
                 </tr>
@@ -441,6 +454,28 @@ export default function AdminProducts() {
                           <span className="text-[10px] text-gray-400">Qty: {p.stockQuantity ?? 0}</span>
                         )}
                       </div>
+                    </td>
+                    <td className="p-4">
+                      {p.expiryDate ? (
+                        <div className="flex flex-col">
+                          <span
+                            className={`text-xs font-semibold ${
+                              expiryStatus(p.expiryDate) === "expired"
+                                ? "text-red-600"
+                                : expiryStatus(p.expiryDate) === "soon"
+                                ? "text-amber-600"
+                                : "text-gray-600"
+                            }`}
+                          >
+                            {formatExpiry(p.expiryDate)}
+                          </span>
+                          {p.batchNumber && (
+                            <span className="text-[10px] text-gray-400">Batch {p.batchNumber}</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-gray-300 text-xs">—</span>
+                      )}
                     </td>
                     <td className="p-4 pr-6 text-right">
                       <div className="flex items-center justify-end gap-2">
@@ -737,6 +772,36 @@ export default function AdminProducts() {
                   {formBonusBuy && formBonusFree
                     ? `Customers who buy ${formBonusBuy} get ${formBonusFree} extra free (repeats per multiple). Leave blank for no offer.`
                     : "e.g. 11 + 1 → buy 11, get 1 free. Leave both blank for no offer."}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">
+                  Expiry &amp; Batch (optional)
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <input
+                      type="date"
+                      value={formExpiryDate}
+                      onChange={(e) => setFormExpiryDate(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand/20"
+                    />
+                    <p className="text-[11px] text-gray-400 mt-1">Expiry date</p>
+                  </div>
+                  <div>
+                    <input
+                      type="text"
+                      placeholder="Batch / lot no."
+                      value={formBatchNumber}
+                      onChange={(e) => setFormBatchNumber(e.target.value)}
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand/20"
+                    />
+                    <p className="text-[11px] text-gray-400 mt-1">Batch number</p>
+                  </div>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Expired products can't be added to cart or ordered.
                 </p>
               </div>
 

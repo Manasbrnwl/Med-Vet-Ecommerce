@@ -11,6 +11,7 @@ const productSelect = {
   price: true, regularPrice: true, salePrice: true,
   stockStatus: true, stockQuantity: true, manageStock: true, sku: true,
   bonusBuyQty: true, bonusFreeQty: true,
+  expiryDate: true, batchNumber: true,
   seoTitle: true, seoDesc: true, createdAt: true, updatedAt: true,
   images: { where: { isPrimary: true }, take: 1, select: { url: true, alt: true } },
   brand:  { select: { id: true, name: true, slug: true } },

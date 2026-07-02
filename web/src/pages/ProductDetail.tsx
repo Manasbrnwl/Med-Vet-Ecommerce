@@ -8,6 +8,7 @@ import type { ProductDetail as ProductDetailType, ProductVariant } from "../api/
 import PriceDisplay from "../components/PriceDisplay";
 import StarRating from "../components/StarRating";
 import { useCartStore } from "../store/cart";
+import { expiryStatus, formatExpiry } from "../utils/expiry";
 
 type TabID = "description" | "specifications" | "reviews";
 
@@ -63,11 +64,14 @@ export default function ProductDetail() {
   const displaySale = activeVariant?.salePrice ?? product.salePrice;
   const stockStatus = activeVariant?.stockStatus ?? product.stockStatus;
   const inStock = stockStatus === "IN_STOCK";
+  const expStatus = expiryStatus(product.expiryDate);
+  const expired = expStatus === "expired";
+  const canBuy = inStock && !expired;
   const images = product.images;
   const currentImg = images[imgIdx];
 
   function handleAddToCart() {
-    if (!inStock) return;
+    if (!canBuy) return;
     addItem({
       productId: product!.id,
       variantId: activeVariant?.id ?? null,
@@ -78,6 +82,7 @@ export default function ProductDetail() {
       sku: activeVariant?.sku ?? product!.sku,
       bonusBuyQty: product!.bonusBuyQty,
       bonusFreeQty: product!.bonusFreeQty,
+      expiryDate: product!.expiryDate,
       qty,
     });
   }
@@ -170,6 +175,15 @@ export default function ProductDetail() {
                 <span className={`w-1.5 h-1.5 rounded-full ${inStock ? "bg-green-500" : "bg-red-500 animate-ping"}`} />
                 {inStock ? "In Stock" : "Out of Stock"}
               </div>
+              {expired ? (
+                <div className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-red-50 text-red-600">
+                  Expired
+                </div>
+              ) : expStatus === "soon" ? (
+                <div className="inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700">
+                  Expiring soon
+                </div>
+              ) : null}
             </div>
             
             <h1 className="text-2xl md:text-3xl font-extrabold text-gray-950 tracking-tight leading-tight">
@@ -209,6 +223,19 @@ export default function ProductDetail() {
             {product.sku && (
               <div className="mt-2 text-xs font-semibold text-gray-500">
                 SKU: <span className="text-gray-700 font-bold">{activeVariant?.sku ?? product.sku}</span>
+              </div>
+            )}
+            {product.expiryDate && (
+              <div
+                className={`mt-1 text-xs font-semibold ${
+                  expired ? "text-red-600" : expStatus === "soon" ? "text-amber-600" : "text-gray-500"
+                }`}
+              >
+                {expired ? "Expired" : "Expiry"}:{" "}
+                <span className="font-bold">{formatExpiry(product.expiryDate)}</span>
+                {product.batchNumber && (
+                  <span className="text-gray-500 font-medium"> · Batch {product.batchNumber}</span>
+                )}
               </div>
             )}
           </div>
@@ -280,11 +307,11 @@ export default function ProductDetail() {
 
               <button
                 onClick={handleAddToCart}
-                disabled={!inStock}
+                disabled={!canBuy}
                 className="flex-1 inline-flex items-center justify-center gap-2 bg-brand hover:bg-brand-dark text-white font-bold py-3.5 px-6 rounded-xl transition-all shadow-md shadow-brand/10 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
               >
                 <ShoppingCart size={18} />
-                {inStock ? "Add to Order Cart" : "Out of Stock"}
+                {expired ? "Expired — Unavailable" : inStock ? "Add to Order Cart" : "Out of Stock"}
               </button>
             </div>
           </div>

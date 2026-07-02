@@ -3,7 +3,7 @@ import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { Screen, Button, Empty, Card } from "../../components/ui";
-import { colors, money, decode } from "../../theme";
+import { colors, money, decode, isExpired } from "../../theme";
 import { useCartStore, bonusFreeUnits, CartItem } from "../../store/cart";
 
 export default function Cart() {
@@ -13,6 +13,7 @@ export default function Cart() {
   const removeItem = useCartStore((s) => s.removeItem);
   const total = useCartStore((s) => s.total);
   const freeTotal = useCartStore((s) => s.freeTotal);
+  const hasExpired = items.some((i) => isExpired(i.expiryDate));
 
   if (items.length === 0) {
     return (
@@ -45,7 +46,13 @@ export default function Cart() {
               <Text style={s.totalLabel}>Total</Text>
               <Text style={s.totalLabel}>{money(total())}</Text>
             </View>
-            <Button title="Proceed to checkout" onPress={() => router.push("/checkout")} style={{ marginTop: 14 }} />
+            {hasExpired ? <Text style={s.expiredWarn}>Remove expired items to check out.</Text> : null}
+            <Button
+              title={hasExpired ? "Remove expired items" : "Proceed to checkout"}
+              onPress={() => router.push("/checkout")}
+              disabled={hasExpired}
+              style={{ marginTop: 14 }}
+            />
           </Card>
         }
       />
@@ -63,6 +70,7 @@ function Row({
   onRemove: (p: number, v: number | null) => void;
 }) {
   const free = bonusFreeUnits(item);
+  const expired = isExpired(item.expiryDate);
   return (
     <Card>
       <View style={{ flexDirection: "row", gap: 12 }}>
@@ -74,6 +82,7 @@ function Row({
         <View style={{ flex: 1 }}>
           <Text numberOfLines={2} style={s.name}>{decode(item.name)}</Text>
           <Text style={s.price}>{money(item.price)}</Text>
+          {expired ? <Text style={s.expiredTag}>Expired — remove to continue</Text> : null}
           {item.bonusBuyQty && item.bonusFreeQty ? (
             free > 0 ? (
               <Text style={s.bonusOn}>+{free} free — you get {item.qty + free} total</Text>
@@ -113,4 +122,6 @@ const s = StyleSheet.create({
   rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   freeLabel: { fontSize: 13, fontWeight: "700", color: colors.success },
   totalLabel: { fontSize: 16, fontWeight: "800", color: colors.text },
+  expiredWarn: { fontSize: 12, fontWeight: "700", color: colors.danger, marginTop: 8, textAlign: "center" },
+  expiredTag: { fontSize: 12, fontWeight: "700", color: colors.danger, marginTop: 3 },
 });

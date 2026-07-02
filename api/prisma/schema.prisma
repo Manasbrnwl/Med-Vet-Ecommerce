@@ -127,6 +127,9 @@ model Product {
   // bulk bonus offer: buy `bonusBuyQty`, get `bonusFreeQty` extra free (per multiple). null = none
   bonusBuyQty      Int?
   bonusFreeQty     Int?
+  // stock expiry (month-only sources stored as end-of-month) + batch/lot number. null = unknown
+  expiryDate       DateTime?
+  batchNumber      String?
   // relations
   brandId          Int?
   brand            Brand?             @relation(fields: [brandId], references: [id])

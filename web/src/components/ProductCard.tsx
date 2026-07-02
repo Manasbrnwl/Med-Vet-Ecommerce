@@ -3,6 +3,7 @@ import { ShoppingCart } from "lucide-react";
 import type { ProductSummary } from "../api/types";
 import PriceDisplay from "./PriceDisplay";
 import { useCartStore } from "../store/cart";
+import { expiryStatus, formatExpiry } from "../utils/expiry";
 
 interface Props {
   product: ProductSummary;
@@ -12,10 +13,12 @@ export default function ProductCard({ product }: Props) {
   const addItem = useCartStore((s) => s.addItem);
   const img = product.images[0];
   const inStock = product.stockStatus === "IN_STOCK";
+  const expStatus = expiryStatus(product.expiryDate);
+  const expired = expStatus === "expired";
 
   function handleAddToCart(e: React.MouseEvent) {
     e.preventDefault();
-    if (!inStock || !product.price) return;
+    if (!inStock || !product.price || expired) return;
     addItem({
       productId: product.id,
       variantId: null,
@@ -24,6 +27,7 @@ export default function ProductCard({ product }: Props) {
       price: Number(product.price),
       image: img?.url ?? null,
       sku: product.sku,
+      expiryDate: product.expiryDate,
     });
   }
 
@@ -45,11 +49,19 @@ export default function ProductCard({ product }: Props) {
             No image
           </div>
         )}
-        {!inStock && (
+        {expired ? (
+          <span className="absolute top-3 left-3 text-[10px] font-bold uppercase tracking-wider bg-red-600 text-white px-2.5 py-1 rounded-full shadow-xs">
+            Expired
+          </span>
+        ) : !inStock ? (
           <span className="absolute top-3 left-3 text-[10px] font-bold uppercase tracking-wider bg-gray-900/90 text-white px-2.5 py-1 rounded-full shadow-xs">
             Out of stock
           </span>
-        )}
+        ) : expStatus === "soon" ? (
+          <span className="absolute top-3 left-3 text-[10px] font-bold uppercase tracking-wider bg-amber-500 text-white px-2.5 py-1 rounded-full shadow-xs">
+            Expiring soon
+          </span>
+        ) : null}
         {product.salePrice && product.regularPrice && product.salePrice !== product.regularPrice && (
           <span className="absolute top-3 right-3 text-[10px] font-bold uppercase tracking-wider bg-red-500 text-white px-2.5 py-1 rounded-full shadow-xs">
             Sale
@@ -70,6 +82,15 @@ export default function ProductCard({ product }: Props) {
         <h3 className="text-sm font-semibold text-gray-900 line-clamp-2 leading-snug group-hover:text-brand transition-colors">
           {product.name}
         </h3>
+        {product.expiryDate && (
+          <span
+            className={`text-[11px] font-semibold ${
+              expired ? "text-red-600" : expStatus === "soon" ? "text-amber-600" : "text-gray-400"
+            }`}
+          >
+            {expired ? "Expired" : "Exp"}: {formatExpiry(product.expiryDate)}
+          </span>
+        )}
         <div className="mt-auto pt-3 flex items-center justify-between">
           <PriceDisplay
             price={product.price}
@@ -77,7 +98,7 @@ export default function ProductCard({ product }: Props) {
             salePrice={product.salePrice}
             className="text-base font-bold text-gray-950"
           />
-          {inStock && product.price && (
+          {inStock && product.price && !expired && (
             <button
               onClick={handleAddToCart}
               className="p-2 rounded-xl bg-teal-50 text-brand hover:bg-brand hover:text-white transition-all duration-300 shadow-xs hover:shadow-md"

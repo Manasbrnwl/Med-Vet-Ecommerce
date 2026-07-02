@@ -8,7 +8,7 @@ import { api, ApiError } from "../api/client";
 import { useAuthStore } from "../store/auth";
 import { useCartStore, bonusFreeUnits } from "../store/cart";
 import type { Profile, CheckoutResponse } from "../api/types";
-import { colors, money, decode } from "../theme";
+import { colors, money, decode, isExpired } from "../theme";
 
 export default function Checkout() {
   const router = useRouter();
@@ -93,6 +93,11 @@ export default function Checkout() {
   }
 
   async function place() {
+    const expired = items.filter((i) => isExpired(i.expiryDate));
+    if (expired.length) {
+      setError(`Remove expired item(s) first: ${expired.map((i) => decode(i.name)).join(", ")}`);
+      return;
+    }
     if (!f.email.trim() || !f.firstName.trim() || !f.address1.trim() || !f.postcode.trim()) {
       setError("Please fill in email, name, address and postcode.");
       return;

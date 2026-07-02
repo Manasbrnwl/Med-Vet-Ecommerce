@@ -7,6 +7,7 @@ import { z } from "zod";
 import { useCartStore } from "../store/cart";
 import { useAuthStore } from "../store/auth";
 import { api } from "../api/client";
+import { isExpired } from "../utils/expiry";
 
 const schema = z.object({
   email: z.string().email("Valid email required"),
@@ -57,7 +58,14 @@ export default function Checkout() {
     );
   }
 
+  const expiredItems = items.filter((i) => isExpired(i.expiryDate));
+  const hasExpired = expiredItems.length > 0;
+
   async function onSubmit(data: FormData) {
+    if (hasExpired) {
+      setError(`Remove expired item(s) before ordering: ${expiredItems.map((i) => i.name).join(", ")}`);
+      return;
+    }
     setSubmitting(true);
     setError("");
     try {
@@ -176,6 +184,9 @@ export default function Checkout() {
                   <div className="flex-1 min-w-0">
                     <p className="text-gray-800 line-clamp-1">{item.name}</p>
                     <p className="text-gray-400 text-xs">×{item.qty}</p>
+                    {isExpired(item.expiryDate) && (
+                      <p className="text-red-600 text-xs font-semibold">Expired — remove to continue</p>
+                    )}
                   </div>
                   <span className="text-gray-700 font-medium flex-shrink-0">
                     S${(item.price * item.qty).toFixed(2)}
@@ -203,10 +214,10 @@ export default function Checkout() {
 
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || hasExpired}
               className="mt-4 w-full bg-brand text-white py-3 rounded-xl font-medium hover:bg-brand-dark transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {submitting ? "Placing order…" : "Place Order"}
+              {submitting ? "Placing order…" : hasExpired ? "Remove expired items" : "Place Order"}
             </button>
 
             <p className="text-xs text-gray-400 text-center mt-2">

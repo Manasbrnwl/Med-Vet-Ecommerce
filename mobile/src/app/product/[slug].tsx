@@ -9,7 +9,7 @@ import { api, ApiError } from "../../api/client";
 import type { ProductDetail, ProductVariant } from "../../api/types";
 import { useCartStore } from "../../store/cart";
 import { useAuthStore } from "../../store/auth";
-import { colors, money, decode } from "../../theme";
+import { colors, money, decode, expiryStatus, formatExpiry } from "../../theme";
 
 interface Eligibility {
   canReview: boolean;
@@ -73,11 +73,14 @@ export default function ProductScreen() {
   const onSale = reg != null && Number(reg) > price;
   const stockStatus = variant?.stockStatus ?? product.stockStatus;
   const inStock = stockStatus !== "OUT_OF_STOCK";
+  const expSt = expiryStatus(product.expiryDate);
+  const expired = expSt === "expired";
   const needsVariant = product.variants.length > 0 && !variant;
+  const canBuy = inStock && !expired && !needsVariant;
   const free = product.bonusBuyQty && product.bonusFreeQty ? Math.floor(qty / product.bonusBuyQty) * product.bonusFreeQty : 0;
 
   function add() {
-    if (!inStock || needsVariant) return;
+    if (!canBuy) return;
     const label =
       decode(product!.name) + (variant ? ` (${variant.attributes.map((a) => a.attributeValue.value).join(", ")})` : "");
     addItem({
@@ -90,6 +93,7 @@ export default function ProductScreen() {
       sku: variant?.sku ?? product!.sku,
       bonusBuyQty: product!.bonusBuyQty,
       bonusFreeQty: product!.bonusFreeQty,
+      expiryDate: product!.expiryDate,
       qty,
     });
     setAdded(true);
@@ -142,6 +146,12 @@ export default function ProductScreen() {
           <Text style={[s.stock, { color: inStock ? colors.success : colors.danger }]}>
             {inStock ? "In stock" : "Out of stock"}
           </Text>
+          {product.expiryDate ? (
+            <Text style={[s.stock, { color: expired ? colors.danger : expSt === "soon" ? colors.warning : colors.muted }]}>
+              {expired ? "Expired" : "Expiry"}: {formatExpiry(product.expiryDate)}
+              {product.batchNumber ? `  ·  Batch ${product.batchNumber}` : ""}
+            </Text>
+          ) : null}
 
           {product.bonusBuyQty && product.bonusFreeQty ? (
             <View style={s.bonus}>
@@ -234,9 +244,9 @@ export default function ProductScreen() {
           <Pressable onPress={() => setQty(qty + 1)} style={s.stepBtn}><Ionicons name="add" size={18} color={colors.text} /></Pressable>
         </View>
         <Button
-          title={added ? "Added ✓" : !inStock ? "Out of stock" : needsVariant ? "Select an option" : "Add to cart"}
+          title={added ? "Added ✓" : expired ? "Expired — unavailable" : !inStock ? "Out of stock" : needsVariant ? "Select an option" : "Add to cart"}
           onPress={add}
-          disabled={!inStock || needsVariant}
+          disabled={!canBuy}
           style={{ flex: 1 }}
         />
       </View>

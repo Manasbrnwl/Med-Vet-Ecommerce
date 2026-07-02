@@ -129,6 +129,7 @@ router.get("/products", async (req, res) => {
         price: true, regularPrice: true, salePrice: true,
         stockStatus: true, stockQuantity: true, manageStock: true,
         totalSales: true, featured: true, bonusBuyQty: true, bonusFreeQty: true, createdAt: true, updatedAt: true,
+        expiryDate: true, batchNumber: true,
         images: { where: { isPrimary: true }, take: 1, select: { url: true } },
         brand: { select: { name: true, slug: true } },
         _count: { select: { variants: true } },
@@ -147,6 +148,18 @@ router.get("/products/:id", async (req, res) => {
   res.json(product);
 });
 
+// Accepts "YYYY-MM-DD" (or ISO) → Date; "" / null → null (clear); absent → undefined (leave untouched).
+const expiryField = z
+  .string()
+  .nullable()
+  .optional()
+  .transform((v) => {
+    if (v === undefined) return undefined;
+    if (v === null || v === "") return null;
+    const d = new Date(v);
+    return isNaN(d.getTime()) ? null : d;
+  });
+
 const productCreateSchema = z.object({
   name:             z.string().min(1),
   type:             z.enum(["SIMPLE", "VARIABLE"]).default("SIMPLE"),
@@ -163,6 +176,8 @@ const productCreateSchema = z.object({
   shortDescription: z.string().optional().nullable(),
   bonusBuyQty:      z.number().int().positive().optional().nullable(),
   bonusFreeQty:     z.number().int().positive().optional().nullable(),
+  expiryDate:       expiryField,
+  batchNumber:      z.string().optional().nullable(),
 });
 
 router.post("/products", async (req, res) => {
@@ -199,6 +214,8 @@ const productUpdateSchema = z.object({
   description:   z.string().nullable().optional(),
   bonusBuyQty:   z.number().int().positive().nullable().optional(),
   bonusFreeQty:  z.number().int().positive().nullable().optional(),
+  expiryDate:    expiryField,
+  batchNumber:   z.string().nullable().optional(),
 });
 
 router.put("/products/:id", async (req, res) => {

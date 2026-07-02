@@ -12,6 +12,7 @@ export interface CartItem {
   sku: string | null;
   bonusBuyQty?: number | null;   // buy N ...
   bonusFreeQty?: number | null;  // ... get M extra free (per multiple)
+  expiryDate?: string | null;    // product expiry (for blocking expired at checkout)
 }
 
 /** Free units earned on a line via its bulk bonus (buy N get M extra free). */

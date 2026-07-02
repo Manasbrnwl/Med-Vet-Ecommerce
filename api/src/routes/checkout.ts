@@ -61,9 +61,12 @@ router.post("/", async (req, res) => {
   for (const item of items) {
     const product = await prisma.product.findUnique({
       where: { id: item.productId },
-      select: { id: true, name: true, price: true, sku: true, stockStatus: true, manageStock: true, stockQuantity: true, bonusBuyQty: true, bonusFreeQty: true },
+      select: { id: true, name: true, price: true, sku: true, stockStatus: true, manageStock: true, stockQuantity: true, bonusBuyQty: true, bonusFreeQty: true, expiryDate: true },
     });
     if (!product) { res.status(422).json({ error: `Product ${item.productId} not found` }); return; }
+    if (product.expiryDate && product.expiryDate < new Date()) {
+      res.status(422).json({ error: `${product.name} has expired and can't be ordered` }); return;
+    }
 
     let price = Number(product.price ?? 0);
     let sku   = product.sku;
