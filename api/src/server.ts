@@ -14,6 +14,7 @@ import accountRouter  from "./routes/account.js";
 import checkoutRouter from "./routes/checkout.js";
 import adminRouter    from "./routes/admin.js";
 import seoRouter      from "./routes/seo.js";
+import webhooksRouter from "./routes/webhooks.js";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
@@ -60,7 +61,12 @@ app.use("/api/checkout/webhook", express.raw({ type: "*/*" }), (req, _res, next)
   next();
 });
 
-app.use(express.json({ limit: "2mb" }));
+// `verify` captures the exact raw bytes alongside normal JSON parsing, needed to check
+// the WooCommerce webhook HMAC signature (which is computed over the raw request body).
+app.use(express.json({
+  limit: "2mb",
+  verify: (req, _res, buf) => { (req as express.Request & { rawBody?: Buffer }).rawBody = buf; },
+}));
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use("/api",          catalogRouter);
@@ -68,6 +74,7 @@ app.use("/api/auth",     authRouter);
 app.use("/api/account",  accountRouter);
 app.use("/api/checkout", checkoutRouter);
 app.use("/api/admin",    adminRouter);
+app.use("/api/webhooks", webhooksRouter);
 
 // ── Health ────────────────────────────────────────────────────────────────────
 app.get("/health", async (_req, res) => {

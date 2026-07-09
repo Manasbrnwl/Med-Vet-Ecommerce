@@ -37,6 +37,10 @@ services:
       HITPAY_API_KEY: ${HITPAY_API_KEY:-}
       HITPAY_SALT: ${HITPAY_SALT:-}
       HITPAY_API_URL: ${HITPAY_API_URL:-https://api.hit-pay.com/v1}
+      WC_WEBHOOK_SECRET: ${WC_WEBHOOK_SECRET:-}
+      WC_API_URL: ${WC_API_URL:-}
+      WC_CONSUMER_KEY: ${WC_CONSUMER_KEY:-}
+      WC_CONSUMER_SECRET: ${WC_CONSUMER_SECRET:-}
       NODE_ENV: production
     depends_on:
       postgres:
