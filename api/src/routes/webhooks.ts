@@ -184,9 +184,21 @@ async function syncVariants(productId: number, wpProductId: number, variationIds
 }
 
 // ── POST /api/webhooks/woocommerce/products ───────────────────────────────────
-// Configure one WooCommerce webhook per topic (Product created / updated / deleted),
-// all pointing at this same URL — the `X-WC-Webhook-Event` header tells them apart.
+// Configure one WooCommerce webhook per topic (Product created / updated / deleted /
+// restored), all pointing at this same URL — the `X-WC-Webhook-Event` header tells
+// them apart. Only "deleted" is special-cased below: WooCommerce sends the full
+// product object for created/updated/restored alike (restoring a trashed product
+// isn't a delete-type action), so the normal upsert path re-syncs it — including
+// `status`, which flips it back out of TRASH — with no extra branch needed.
 router.post("/woocommerce/products", async (req, res) => {
+  // WooCommerce's one-time connectivity ping (sent right after a webhook is saved) is
+  // unsigned by design — body is just `webhook_id=N`, no signature header at all. It
+  // carries no product data and triggers no writes, so just acknowledge it.
+  if (!req.header("x-wc-webhook-signature") && req.body && "webhook_id" in req.body) {
+    res.json({ ok: true, ping: true });
+    return;
+  }
+
   if (!verifyWooSignature(req.rawBody, req.header("x-wc-webhook-signature"))) {
     res.status(401).json({ error: "Invalid webhook signature" });
     return;

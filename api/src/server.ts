@@ -61,6 +61,20 @@ app.use("/api/checkout/webhook", express.raw({ type: "*/*" }), (req, _res, next)
   next();
 });
 
+// WooCommerce sends a one-time connectivity "ping" (application/x-www-form-urlencoded,
+// body `webhook_id=N`) the moment a webhook is saved, separate from the real product
+// events (application/json, handled by the express.json() verify hook below).
+app.use("/api/webhooks/woocommerce", (req, res, next) => {
+  if ((req.headers["content-type"] || "").includes("application/json")) { next(); return; }
+  express.raw({ type: "*/*" })(req, res, () => {
+    if (Buffer.isBuffer(req.body)) {
+      (req as express.Request & { rawBody?: Buffer }).rawBody = req.body;
+      try { req.body = Object.fromEntries(new URLSearchParams(req.body.toString())); } catch { req.body = {}; }
+    }
+    next();
+  });
+});
+
 // `verify` captures the exact raw bytes alongside normal JSON parsing, needed to check
 // the WooCommerce webhook HMAC signature (which is computed over the raw request body).
 app.use(express.json({
